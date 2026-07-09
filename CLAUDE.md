@@ -91,6 +91,17 @@ js/ui.js              表格渲染、DOM 操作、事件綁定、Chart.js 繪圖
 // 投球: { gp, outs, H, R, ER, BB, SO, wER, GO, AO, ERA, WHIP, K9, BB9, GOAO }
 ```
 
+## 發布流程(Claude Artifact)
+
+Claude Artifact 只接受單一 HTML 檔,平常開發用拆分後的檔案,發布時用 build script 合併回單檔:
+
+1. 更新 `js/data.js` 最上方的 `APP_VERSION`
+2. 執行 `node build.js` → 產出 `dist/index.html`(css + 7 個 js 依載入順序內嵌回單一 HTML,Chart.js CDN 保留)
+3. 把 `dist/index.html` 的完整內容貼回 Claude Artifact 更新發布(**更新同一個已發布的 Artifact**,`window.storage` 的舊資料才會沿用)
+4. 開啟發布連結,核對登入畫面的版號是否為新版;版號沒變先 Ctrl+F5 強制重新整理再判斷
+
+`dist/` 是 build 產物,已列入 `.gitignore`,不進版控。build script 會驗證:css link 存在、恰好內嵌 7 個 js、js 內容不含 `</script>` 字串(會破壞 HTML)。
+
 ## 版號規則
 
 - 版號常數 `APP_VERSION` 定義於 `js/data.js` 最上方(格式:`v主.次.修 · YYYY-MM-DD`),**每次發布前必須更新**。
