@@ -130,6 +130,7 @@ function renderGames(){
       <td><button class="del" onclick="delLine('${g.id}','pitching',${i})">✕</button></td></tr>`).join("");
     const comments = (g.comments||[]).map((c,i)=>`<div class="comment"><span class="t">${esc(c.t)}</span>${esc(c.text)}
       <button class="del" style="float:right" onclick="delComment('${g.id}',${i})">✕</button></div>`).join("");
+    const cmtText = (g.comments||[]).map(c=>`${c.t} ${c.text}`).join("\n");
     const media = (g.media||[]).map((m,i)=>{
       const isImg = /^data:image\//.test(m.url) || /\.(jpe?g|png|gif|webp|avif|bmp|heic|heif)(\?|$)/i.test(m.url);
       const isData = /^data:image\//.test(m.url);
@@ -178,6 +179,13 @@ function renderGames(){
           ${["H:被安打","R:失分","ER:自責分","BB:四死","SO:三振","GO:滾地出局","AO:飛球出局"].map(x=>{const[k,l]=x.split(":");return `<div class="fld w60"><label>${l}</label><input type="number" min="0" value="0" id="p${k}-${g.id}"></div>`;}).join("")}
           <div class="fld"><label>面對打線</label><select id="pvsB-${g.id}"><option value="">不明</option><option value="R">右打為主</option><option value="L">左打為主</option><option value="M">混合</option></select></div>
           <button class="btn sm" onclick="addPitLine('${g.id}')">＋ 登錄</button>
+          <button class="btn ghost sm" onclick="toggleErPanel('${g.id}')">🤖 AI 判斷自責分</button>
+        </div>
+        <div class="edit-only" id="erPanel-${g.id}" style="display:none;background:#f4f6fb;border:1px solid #ccd6ea;border-radius:8px;padding:10px 12px;margin-top:6px">
+          <div class="hint">描述該投手任內的失分過程（有無失誤、捕逸、非責任跑者等），AI 依棒球規則判定自責分並自動填入上方欄位。已自動帶入本場講評，可自行增刪修改。</div>
+          <textarea id="erDesc-${g.id}" placeholder="例：三局下游擊失誤上壘，之後被二壘安打掉 1 分" style="width:100%;min-height:64px;margin:6px 0;font-size:13px">${esc(cmtText)}</textarea>
+          <button class="btn gold sm" id="erBtn-${g.id}" onclick="aiJudgeER('${g.id}')">⚖️ AI 判定自責分</button>
+          <div id="erOut-${g.id}"></div>
         </div>
 
         <div class="subhead">即時講評 / 賽況記錄</div>
