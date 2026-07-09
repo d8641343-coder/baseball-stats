@@ -442,6 +442,8 @@ document.getElementById("aiScope").onchange = function(){
 };
 
 (async () => {
+  document.getElementById("appVer").textContent = APP_VERSION;
+  document.getElementById("appVerAuth").textContent = APP_VERSION;
   const now = new Date();
   document.getElementById("gDate").value = now.toISOString().slice(0,10);
   document.getElementById("aiMonth").value = now.toISOString().slice(0,7);

@@ -91,6 +91,11 @@ js/ui.js              表格渲染、DOM 操作、事件綁定、Chart.js 繪圖
 // 投球: { gp, outs, H, R, ER, BB, SO, wER, GO, AO, ERA, WHIP, K9, BB9, GOAO }
 ```
 
+## 版號規則
+
+- 版號常數 `APP_VERSION` 定義於 `js/data.js` 最上方(格式:`v主.次.修 · YYYY-MM-DD`),**每次發布前必須更新**。
+- 顯示位置:頁首副標(`#appVer`)與登入畫面(`#appVerAuth`),由 `js/ui.js` 的進場初始化 IIFE 填入——登入前就看得到,用來核對發布出去的是不是最新版。
+
 ## 命名慣例
 
 - **CRUD**:`addX()`/`delX(id)`/`editX(id)` — 如 `addPlayer`/`delPlayer`/`editPlayer`、`addGame`/`delGame`、`addBatLine`/`addPitLine`/`delLine`
