@@ -1,5 +1,5 @@
 /* ───────── 版本(每次發布前更新此處) ───────── */
-const APP_VERSION = "v1.6.2 · 2026-07-10";
+const APP_VERSION = "v1.6.3 · 2026-07-11";
 
 /* ───────── 狀態 ───────── */
 let state = { teamName:"親子勇士", eraBases:{U12:6,U15:7,"其他":9}, players:[], games:[], honors:[], scouts:[] };
@@ -382,8 +382,21 @@ const IMP_FORMATS = {
   pitching: "欄位順序：日期, 對手, 姓名, 局數(2.1=2又1/3), 被安打, 失分, 自責分, 四死, 三振, 面對打線(右/左/混), 滾地出局, 飛球出局\n範例：2026-07-05, 向上, 王小明, 3.2, 4, 2, 1, 3, 5, 右, 6, 3（後面欄位可留空）"
 };
 const HAND_MAP = {"右":"R","左":"L","混":"M","混合":"M"};
+/* 伏せ字マッチ：吳O淏 之類（中間字被網站遮成 O/○/〇/＊/* 等）對映到既有球員 吳丞淏。
+   逐字比對，遮罩字元視為萬用字（任意一字）；唯一命中才回傳，否則回傳 null。 */
+const MASK_CHARS = /[Oo0Ｏｏ０○〇◯●＊*✕✖×Xx]/;
+function findMaskedPlayer(name){
+  if(!name || !MASK_CHARS.test(name)) return null;
+  const chars = [...name];
+  const pat = "^" + chars.map(ch =>
+    MASK_CHARS.test(ch) ? "." : ch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+  ).join("") + "$";
+  const re = new RegExp(pat);
+  const hits = state.players.filter(p => [...(p.name||"")].length === chars.length && re.test(p.name));
+  return hits.length === 1 ? hits[0] : null;   // 多筆或零筆皆不猜，避免誤映
+}
 function findOrCreatePlayer(name, level){
-  let p = state.players.find(p=>p.name===name);
+  let p = state.players.find(p=>p.name===name) || findMaskedPlayer(name);
   if(!p){ p = {id:uid(), name, num:"", pos:"", level:level||"U12", throws:"", bats:"", photo:""}; state.players.push(p); }
   return p;
 }
