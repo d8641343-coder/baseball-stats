@@ -1,5 +1,5 @@
 /* ───────── 版本(每次發布前更新此處) ───────── */
-const APP_VERSION = "v1.5.1 · 2026-07-10";
+const APP_VERSION = "v1.5.2 · 2026-07-10";
 
 /* ───────── 狀態 ───────── */
 let state = { teamName:"親子勇士", eraBases:{U12:6,U15:7,"其他":9}, players:[], games:[], honors:[], scouts:[] };
@@ -271,9 +271,10 @@ function addPitLine(gid){
   if(line.ER > line.R) return toast("自責分不可大於失分");
   g.pitching.push(line); save(); renderAll(); openCard(gid); toast("已登錄投球");
 }
-function delLine(gid,type,i){
+async function delLine(gid,type,i){
   const g = state.games.find(x=>x.id===gid); if(!g) return;
   if(!guardEdit(g.level)) return;
+  if(!await confirmBox(`刪除這筆${type==="batting"?"打擊":"投球"}紀錄？`)) return;
   g[type].splice(i,1); if(editLine && editLine.gid===gid) editLine=null; save(); renderAll(); openCard(gid);
 }
 /* ── 已登錄的打擊 / 投球紀錄可就地修改 ── */
@@ -313,8 +314,10 @@ function addComment(gid){
   g.comments.push({t: new Date().toTimeString().slice(0,5), text});
   save(); renderAll(); openCard(gid);
 }
-function delComment(gid,i){
-  const g=state.games.find(x=>x.id===gid); if(!g) return; if(!guardEdit(g.level)) return; g.comments.splice(i,1); save(); renderAll(); openCard(gid); }
+async function delComment(gid,i){
+  const g=state.games.find(x=>x.id===gid); if(!g) return; if(!guardEdit(g.level)) return;
+  if(!await confirmBox("刪除這則講評？")) return;
+  g.comments.splice(i,1); save(); renderAll(); openCard(gid); }
 function addMedia(gid){
   const g = state.games.find(x=>x.id===gid); if(!g) return;
   if(!guardEdit(g.level)) return;
@@ -323,8 +326,10 @@ function addMedia(gid){
   g.media.push({url, cap:document.getElementById("mc-"+gid).value.trim()});
   save(); renderAll(); openCard(gid); toast("已加入媒體連結");
 }
-function delMedia(gid,i){
-  const g=state.games.find(x=>x.id===gid); if(!g) return; if(!guardEdit(g.level)) return; g.media.splice(i,1); save(); renderAll(); openCard(gid); }
+async function delMedia(gid,i){
+  const g=state.games.find(x=>x.id===gid); if(!g) return; if(!guardEdit(g.level)) return;
+  if(!await confirmBox("刪除這張照片／影片連結？")) return;
+  g.media.splice(i,1); save(); renderAll(); openCard(gid); }
 async function editPhoto(pid){
   const p = getP(pid); if(!p) return;
   if(!guardEdit(p.level)) return;
@@ -492,9 +497,10 @@ function addKeyPlayer(sid){
     note:document.getElementById("kt-"+sid).value.trim()});
   save(); renderAll(); gotoScout(sid);
 }
-function delKeyPlayer(sid,i){
+async function delKeyPlayer(sid,i){
   if(!guardEdit()) return;
   const sc = state.scouts.find(s=>s.id===sid); if(!sc) return;
+  if(!await confirmBox("刪除這位關鍵球員？")) return;
   sc.keyPlayers.splice(i,1); save(); renderAll(); gotoScout(sid);
 }
 async function editScout(sid){
