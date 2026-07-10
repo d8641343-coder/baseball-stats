@@ -1,10 +1,11 @@
 /* ───────── 版本(每次發布前更新此處) ───────── */
-const APP_VERSION = "v1.5.2 · 2026-07-10";
+const APP_VERSION = "v1.5.3 · 2026-07-10";
 
 /* ───────── 狀態 ───────── */
 let state = { teamName:"親子勇士", eraBases:{U12:6,U15:7,"其他":9}, players:[], games:[], honors:[], scouts:[] };
 let win = { overview:"all", batting:"all", pitching:"all" };
 let lvl = "all";
+let ovSquad = "all";   // 球隊近況的分隊篩選："all"|"藍"|"白"|"紅"
 const openGames = new Set();   // 記住展開中的比賽卡片，讓即時同步重繪後仍保持展開
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,6);
 
@@ -31,6 +32,12 @@ function lvlGames(){ return sortedGames().filter(g => lvl==="all" || (g.level||"
 function windowGames(w){
   const g = lvlGames();
   return w==="all" ? g : g.slice(-Number(w));
+}
+// 球隊近況專用：先套用階級與分隊篩選，再取近 N 場
+function overviewGames(){
+  let g = lvlGames();
+  if(ovSquad!=="all") g = g.filter(x => (x.squad||"")===ovSquad);
+  return win.overview==="all" ? g : g.slice(-Number(win.overview));
 }
 function gameResult(g){ return g.us>g.them ? "W" : g.us<g.them ? "L" : "T"; }
 function mvpCounts(pid){

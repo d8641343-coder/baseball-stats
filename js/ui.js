@@ -32,7 +32,7 @@ function renderHeader(){
 
 /* ───────── 總覽 ───────── */
 function renderOverview(){
-  const games = windowGames(win.overview);
+  const games = overviewGames();
   const w = games.filter(x=>gameResult(x)==="W").length;
   const l = games.filter(x=>gameResult(x)==="L").length;
   const t = games.length - w - l;
@@ -523,6 +523,13 @@ document.getElementById("lvlChips").addEventListener("click", e=>{
   document.querySelectorAll("#lvlChips .chip").forEach(c=>c.classList.remove("active"));
   e.target.classList.add("active");
   lvl = e.target.dataset.lvl;
+  renderAll();
+});
+document.getElementById("ovSquadChips").addEventListener("click", e=>{
+  if(!e.target.classList.contains("chip")) return;
+  document.querySelectorAll("#ovSquadChips .chip").forEach(c=>c.classList.remove("active"));
+  e.target.classList.add("active");
+  ovSquad = e.target.dataset.squad;
   renderAll();
 });
 [["ovChips","overview"],["batChips","batting"],["pitChips","pitching"]].forEach(([cid,key])=>{
