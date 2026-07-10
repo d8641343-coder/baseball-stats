@@ -205,3 +205,14 @@ body.viewer .del{display:none!important}
 body.viewer .btn.warn{display:none!important}
 body.viewer .pw-admin{display:none!important}
 body.editor .pw-admin{display:none!important}
+/* 僅管理者可見（如教練帶隊戰績） */
+body:not(.admin) .admin-only{display:none!important}
+/* 編輯者對「非其負責階級」的比賽卡片：隱藏所有編輯控制 */
+.game-card.noedit .edit-only{display:none!important}
+.game-card.noedit .del{display:none!important}
+/* 比賽紀錄就地編輯列 */
+.game-card .edit-row input{width:44px}
+.game-card .edit-row input,.game-card .edit-row select{font-size:13px;padding:2px 4px}
+/* 分隊徽章 */
+.squad-badge{display:inline-block;border-radius:4px;padding:1px 7px;font-size:11px;font-weight:700;margin-left:6px;color:#fff}
+.sq-藍{background:#2563b6}.sq-白{background:#8a8f99}.sq-紅{background:#c0392b}

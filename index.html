@@ -74,9 +74,11 @@
   <h2>球員近況排行（依 OPS）</h2>
   <div class="hint">依上方選取的區間統計，點球員姓名可看個人歷程。</div>
   <div id="ovLeaders" class="tblwrap"></div>
-  <h2>教練帶隊戰績</h2>
-  <div class="hint">依上方選取的區間與階級統計；教練在建立比賽時填入，也可在比賽卡片中補登。</div>
-  <div id="coachTable"></div>
+  <div class="admin-only">
+    <h2>教練帶隊戰績</h2>
+    <div class="hint">僅管理者可見。依上方選取的區間與階級統計；教練在建立比賽時填入，也可在比賽卡片中補登。</div>
+    <div id="coachTable"></div>
+  </div>
 </section>
 
 <!-- ══ 比賽 ══ -->
@@ -86,6 +88,7 @@
     <div class="frow">
       <div class="fld"><label>日期</label><input type="date" id="gDate"></div>
       <div class="fld"><label>階級</label><select id="gLvl"><option>U12</option><option>U15</option><option>其他</option></select></div>
+      <div class="fld"><label>分隊</label><select id="gSquad"><option value="">未分隊</option><option value="藍">藍隊</option><option value="白">白隊</option><option value="紅">紅隊</option></select></div>
       <div class="fld"><label>賽事名稱</label><input id="gTour" placeholder="例：協會盃" style="width:120px"></div>
       <div class="fld"><label>對手</label><input id="gOpp" placeholder="對戰球隊" style="width:120px"></div>
       <div class="fld w60"><label>我方得分</label><input type="number" id="gUs" min="0" value="0"></div>

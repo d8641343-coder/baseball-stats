@@ -1,5 +1,5 @@
 /* ───────── 版本(每次發布前更新此處) ───────── */
-const APP_VERSION = "v1.4.0 · 2026-07-10";
+const APP_VERSION = "v1.5.0 · 2026-07-10";
 
 /* ───────── 狀態 ───────── */
 let state = { teamName:"親子勇士", eraBases:{U12:6,U15:7,"其他":9}, players:[], games:[], honors:[], scouts:[] };
@@ -89,18 +89,18 @@ async function pickAvatarFile(input){
   }catch(e){ pendingAvatar=""; toast(photoErrMsg(e)); }
 }
 async function uploadAvatarFor(input, pid){
-  if(!guardEdit()) return;
-  const f = input.files[0]; input.value=""; if(!f) return;
   const p = getP(pid); if(!p) return;
+  if(!guardEdit(p.level)) return;
+  const f = input.files[0]; input.value=""; if(!f) return;
   try{
     p.photo = await fileToDataURL(f, 256, 0.82);
     save(); renderAll(); openProfile(pid); toast("大頭照已更新");
   }catch(e){ toast(photoErrMsg(e)); }
 }
 async function uploadMediaFile(input, gid){
-  if(!guardEdit()) return;
-  const f = input.files[0]; input.value=""; if(!f) return;
   const g = state.games.find(x=>x.id===gid); if(!g) return;
+  if(!guardEdit(g.level)) return;
+  const f = input.files[0]; input.value=""; if(!f) return;
   try{
     const d = await fileToDataURL(f, 900, 0.72);
     g.media.push({url:d, cap:document.getElementById("mc-"+gid).value.trim()});
@@ -162,7 +162,7 @@ async function save(){
 
 /* ───────── 工具 ───────── */
 function addPlayer(){
-  if(!guardEdit()) return;
+  if(!guardEdit(document.getElementById("pLvl").value)) return;
   const name = document.getElementById("pName").value.trim();
   if(!name) return toast("請輸入球員姓名");
   state.players.push({id:uid(), name,
@@ -178,19 +178,22 @@ function addPlayer(){
   save(); renderAll(); toast("已加入 "+name);
 }
 async function delPlayer(id){
-  if(!guardEdit()) return;
+  const p = getP(id); if(!p) return;
+  if(!guardEdit(p.level)) return;
   const used = state.games.some(g => (g.batting||[]).some(l=>l.pid===id) || (g.pitching||[]).some(l=>l.pid===id));
   if(!await confirmBox(used?"此球員已有比賽數據，移除後數據仍保留但顯示為（已移除）。確定移除？":"確定移除此球員？")) return;
   state.players = state.players.filter(p=>p.id!==id);
   save(); renderAll();
 }
 function addGame(){
-  if(!guardEdit()) return;
+  const level = document.getElementById("gLvl").value;
+  if(!guardEdit(level)) return;
   const date = document.getElementById("gDate").value;
   const opp = document.getElementById("gOpp").value.trim();
   if(!date || !opp) return toast("請填日期與對手");
   state.games.push({ id:uid(), created:Date.now(), date, opp,
-    level:document.getElementById("gLvl").value,
+    level,
+    squad:document.getElementById("gSquad").value,
     tour:document.getElementById("gTour").value.trim(),
     coach:document.getElementById("gCoach").value.trim(),
     us:Number(document.getElementById("gUs").value)||0,
@@ -200,41 +203,54 @@ function addGame(){
   save(); renderAll(); toast("已建立比賽");
 }
 async function delGame(id){
-  if(!guardEdit()) return;
+  const g = state.games.find(x=>x.id===id); if(!g) return;
+  if(!guardEdit(g.level)) return;
   if(!await confirmBox("刪除整場比賽與其所有數據？")) return;
   state.games = state.games.filter(g=>g.id!==id);
   save(); renderAll();
 }
 function setGameCoach(gid, name){
-  if(!guardEdit()) return;
   const g = state.games.find(x=>x.id===gid); if(!g) return;
+  if(!guardEdit(g.level)) return;
   g.coach = name.trim(); save(); renderAll(); openCard(gid);
 }
 function setGameDate(gid, val){
-  if(!guardEdit()) return;
   const g = state.games.find(x=>x.id===gid); if(!g) return;
+  if(!guardEdit(g.level)) return;
   const d = normDate(val);
   if(!d) return toast("日期格式不正確");
   g.date = d; save(); renderAll(); openCard(gid);
+}
+// 比賽列表的基本紀錄可直接編輯（對手 / 賽事 / 比分 / 階級 / 分隊）
+function setGameField(gid, field, val){
+  const g = state.games.find(x=>x.id===gid); if(!g) return;
+  if(!guardEdit(g.level)) return;
+  if(field==="us" || field==="them") g[field] = Math.max(0, Number(val)||0);
+  else if(field==="level"){ if(!["U12","U15","其他"].includes(val)) return; if(!guardEdit(val)) return; g.level = val; }
+  else if(field==="squad") g.squad = ["藍","白","紅"].includes(val) ? val : "";
+  else if(field==="opp"){ const o = String(val).trim(); if(!o) return toast("對手不可空白"); g.opp = o; }
+  else if(field==="tour") g.tour = String(val).trim();
+  else return;
+  save(); renderAll(); openCard(gid);
 }
 function coachNames(){
   return [...new Set(state.games.map(g=>(g.coach||"").trim()).filter(Boolean))];
 }
 function setGameAward(gid, key, pid){
-  if(!guardEdit()) return;
   const g = state.games.find(x=>x.id===gid); if(!g) return;
+  if(!guardEdit(g.level)) return;
   g[key] = pid; save(); renderAll(); openCard(gid);
   if(pid) toast((key==="mvp"?"單場 MVP：":"單場 SVP：")+playerName(pid));
 }
 async function clearAiAward(gid){
-  if(!guardEdit()) return;
   const g = state.games.find(x=>x.id===gid); if(!g) return;
+  if(!guardEdit(g.level)) return;
   if(!await confirmBox("清除本場 AI 評選結果？")) return;
   g.aiMvp = null; g.aiSvp = null; save(); renderAll(); openCard(gid);
 }
 function addBatLine(gid){
-  if(!guardEdit()) return;
   const g = state.games.find(x=>x.id===gid); if(!g) return;
+  if(!guardEdit(g.level)) return;
   const pid = document.getElementById("bp-"+gid).value;
   if(!pid) return toast("請先選擇球員（名單可在「球員名單」新增）");
   const line = {pid, vsP: document.getElementById("bvsP-"+gid).value};
@@ -244,8 +260,8 @@ function addBatLine(gid){
   g.batting.push(line); save(); renderAll(); openCard(gid); toast("已登錄打擊");
 }
 function addPitLine(gid){
-  if(!guardEdit()) return;
   const g = state.games.find(x=>x.id===gid); if(!g) return;
+  if(!guardEdit(g.level)) return;
   const pid = document.getElementById("pp-"+gid).value;
   if(!pid) return toast("請先選擇球員");
   const outs = parseIP(document.getElementById("pIP-"+gid).value);
@@ -256,40 +272,69 @@ function addPitLine(gid){
   g.pitching.push(line); save(); renderAll(); openCard(gid); toast("已登錄投球");
 }
 function delLine(gid,type,i){
-  if(!guardEdit()) return;
   const g = state.games.find(x=>x.id===gid); if(!g) return;
-  g[type].splice(i,1); save(); renderAll(); openCard(gid);
+  if(!guardEdit(g.level)) return;
+  g[type].splice(i,1); if(editLine && editLine.gid===gid) editLine=null; save(); renderAll(); openCard(gid);
+}
+/* ── 已登錄的打擊 / 投球紀錄可就地修改 ── */
+let editLine = null;   // {gid, type:'batting'|'pitching', i}
+function startEditLine(gid, type, i){
+  const g = state.games.find(x=>x.id===gid); if(!g) return;
+  if(!guardEdit(g.level)) return;
+  editLine = {gid, type, i}; renderGames(); openCard(gid);
+}
+function cancelEditLine(){ editLine = null; renderGames(); }
+function saveEditBatLine(gid, i){
+  const g = state.games.find(x=>x.id===gid); if(!g) return;
+  if(!guardEdit(g.level)) return;
+  const cur = (g.batting||[])[i]; if(!cur) return;
+  const line = {pid:cur.pid, vsP:document.getElementById(`ebvsP-${gid}-${i}`).value};
+  BKEYS.forEach(k => line[k] = Math.max(0, Number(document.getElementById(`eb${k}-${gid}-${i}`).value)||0));
+  if(line.H > line.AB) return toast("安打數不可大於打數");
+  if(line.d2+line.d3+line.HR > line.H) return toast("長打數不可大於安打數");
+  g.batting[i] = line; editLine = null; save(); renderAll(); openCard(gid); toast("已更新打擊紀錄");
+}
+function saveEditPitLine(gid, i){
+  const g = state.games.find(x=>x.id===gid); if(!g) return;
+  if(!guardEdit(g.level)) return;
+  const cur = (g.pitching||[])[i]; if(!cur) return;
+  const outs = parseIP(document.getElementById(`epIP-${gid}-${i}`).value);
+  if(outs===null) return toast("局數格式錯誤，例：2、2.1、2.2");
+  const line = {pid:cur.pid, outs, vsB:document.getElementById(`epvsB-${gid}-${i}`).value};
+  ["H","R","ER","BB","SO","GO","AO"].forEach(k => line[k] = Math.max(0, Number(document.getElementById(`ep${k}-${gid}-${i}`).value)||0));
+  if(line.ER > line.R) return toast("自責分不可大於失分");
+  g.pitching[i] = line; editLine = null; save(); renderAll(); openCard(gid); toast("已更新投球紀錄");
 }
 function addComment(gid){
-  if(!guardEdit()) return;
   const g = state.games.find(x=>x.id===gid); if(!g) return;
+  if(!guardEdit(g.level)) return;
   const text = document.getElementById("cm-"+gid).value.trim();
   if(!text) return;
   g.comments.push({t: new Date().toTimeString().slice(0,5), text});
   save(); renderAll(); openCard(gid);
 }
 function delComment(gid,i){
-  if(!guardEdit()) return; const g=state.games.find(x=>x.id===gid); g.comments.splice(i,1); save(); renderAll(); openCard(gid); }
+  const g=state.games.find(x=>x.id===gid); if(!g) return; if(!guardEdit(g.level)) return; g.comments.splice(i,1); save(); renderAll(); openCard(gid); }
 function addMedia(gid){
-  if(!guardEdit()) return;
   const g = state.games.find(x=>x.id===gid); if(!g) return;
+  if(!guardEdit(g.level)) return;
   const url = document.getElementById("mu-"+gid).value.trim();
   if(!/^https?:\/\//i.test(url)) return toast("請輸入 http/https 開頭的網址");
   g.media.push({url, cap:document.getElementById("mc-"+gid).value.trim()});
   save(); renderAll(); openCard(gid); toast("已加入媒體連結");
 }
 function delMedia(gid,i){
-  if(!guardEdit()) return; const g=state.games.find(x=>x.id===gid); g.media.splice(i,1); save(); renderAll(); openCard(gid); }
+  const g=state.games.find(x=>x.id===gid); if(!g) return; if(!guardEdit(g.level)) return; g.media.splice(i,1); save(); renderAll(); openCard(gid); }
 async function editPhoto(pid){
-  if(!guardEdit()) return;
   const p = getP(pid); if(!p) return;
+  if(!guardEdit(p.level)) return;
   const url = await promptBox("貼上大頭照網址（清空可移除）：", p.photo||"");
   if(url===null) return;
   p.photo = url.trim(); save(); renderAll(); openProfile(pid);
 }
 async function editPlayer(pid){
-  if(!guardEdit()) return;
   const p = getP(pid); if(!p) return;
+  if(!guardEdit(p.level)) return;
   const name = await promptBox("姓名：", p.name); if(name===null) return;
   const num = await promptBox("背號：", p.num||""); if(num===null) return;
   const pos = await promptBox("守位：", p.pos||""); if(pos===null) return;
@@ -306,7 +351,7 @@ async function editPlayer(pid){
 
 /* ───────── AI 功能 ───────── */
 function setEraBaseLvl(level, v){
-  if(!guardEdit()) return;
+  if(!guardEdit(level)) return;
   state.eraBases = state.eraBases || {U12:6,U15:7,"其他":9};
   state.eraBases[level] = Number(v); save(); renderAll();
 }
@@ -323,13 +368,13 @@ function findOrCreatePlayer(name, level){
 }
 function findOrCreateGame(date, opp, level){
   let g = state.games.find(g=>g.date===date && g.opp===opp);
-  if(!g){ g = {id:uid(), created:Date.now(), date, opp, level:level||"U12", tour:"", coach:"", us:0, them:0, mvp:"", svp:"", batting:[], pitching:[], comments:[], media:[]}; state.games.push(g); }
+  if(!g){ g = {id:uid(), created:Date.now(), date, opp, level:level||"U12", squad:"", tour:"", coach:"", us:0, them:0, mvp:"", svp:"", batting:[], pitching:[], comments:[], media:[]}; state.games.push(g); }
   return g;
 }
 function runImport(){
-  if(!guardEdit()) return;
   const type = document.getElementById("impType").value;
   const level = document.getElementById("impLvl").value;
+  if(!guardEdit(level)) return;
   const raw = document.getElementById("impText").value.trim();
   const out = document.getElementById("impResult");
   if(!raw){ out.innerHTML = "請先貼上資料。"; return; }
@@ -467,14 +512,15 @@ async function delScout(sid){
   save(); renderAll();
 }
 async function saveHonor(json){
-  if(!guardEdit()) return;
   const h = JSON.parse(json);
+  if(!guardEdit(["U12","U15","其他"].includes(h.level)?h.level:null)) return;
   const dup = state.honors.find(x=>x.type===h.type && x.period===h.period && x.level===h.level);
   if(dup && !await confirmBox("此期間已有評選紀錄，要再新增一筆嗎？")) return;
   state.honors.push(h); save(); renderAll(); toast("已存入榮譽榜");
 }
 async function delHonor(id){
-  if(!guardEdit()) return;
+  const h0 = state.honors.find(h=>h.id===id); if(!h0) return;
+  if(!guardEdit(["U12","U15","其他"].includes(h0.level)?h0.level:null)) return;
   if(!await confirmBox("刪除此筆榮譽紀錄？")) return;
   state.honors = state.honors.filter(h=>h.id!==id);
   save(); renderAll();

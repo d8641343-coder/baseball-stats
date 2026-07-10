@@ -10,6 +10,7 @@ function nameLink(pid){
   return p ? `<span class="pname" onclick="openProfile('${pid}')">${esc(p.name)}</span>` : "（已移除）";
 }
 function lvlBadge(v){ return `<span class="lvl-badge lvl-${v==="U12"||v==="U15"?v:"其他"}">${esc(v||"U12")}</span>`; }
+function squadBadge(v){ if(!["藍","白","紅"].includes(v)) return ""; return `<span class="squad-badge sq-${v}">${v}隊</span>`; }
 function handBadge(p){
   if(!p || (!p.throws && !p.bats)) return "";
   const t = p.throws ? p.throws+"投" : "";
@@ -111,23 +112,46 @@ function playerOptions(sel, level){
 }
 function toggleGame(id){ const el=document.getElementById("gc-"+id); if(!el) return; if(openGames.has(id)){ openGames.delete(id); el.classList.remove("open"); } else { openGames.add(id); el.classList.add("open"); } }
 function renderGames(){
-  const games = lvlGames().slice().reverse();
+  // 依比賽日期排序、最近的排最前面（同日再依建立時間，新的在前）
+  const games = lvlGames().slice().sort((a,b)=> b.date.localeCompare(a.date) || (b.created||0)-(a.created||0));
   if(!games.length){ document.getElementById("gameList").innerHTML = `<div class="empty">此階級尚無比賽。</div>`; return; }
   document.getElementById("gameList").innerHTML = games.map(g=>{
     const r = gameResult(g);
-    const batRows = (g.batting||[]).map((l,i)=>`<tr>
+    const editable = canEdit(g.level);
+    const batRows = (g.batting||[]).map((l,i)=>{
+      if(editable && editLine && editLine.gid===g.id && editLine.type==="batting" && editLine.i===i){
+        return `<tr class="edit-row">
+          <td class="l">${nameLink(l.pid)}</td>
+          ${BKEYS.map(k=>`<td><input type="number" min="0" value="${l[k]||0}" id="eb${k}-${g.id}-${i}"></td>`).join("")}
+          <td><select id="ebvsP-${g.id}-${i}"><option value=""${!l.vsP?" selected":""}>不明</option><option value="R"${l.vsP==="R"?" selected":""}>右</option><option value="L"${l.vsP==="L"?" selected":""}>左</option><option value="M"${l.vsP==="M"?" selected":""}>混</option></select></td>
+          <td style="white-space:nowrap"><button class="btn sm" onclick="saveEditBatLine('${g.id}',${i})">✓存</button> <button class="del" onclick="cancelEditLine()">✕</button></td></tr>`;
+      }
+      return `<tr>
       <td class="l">${nameLink(l.pid)}</td><td class="num">${l.AB}</td><td class="num">${l.H}</td>
       <td class="num">${l.d2}</td><td class="num">${l.d3}</td><td class="num">${l.HR}</td>
       <td class="num">${l.BB}</td><td class="num">${l.SF}</td><td class="num">${l.R}</td><td class="num">${l.RBI}</td>
       <td class="num">${l.SO}</td><td class="num">${l.SB}</td><td>${VSP_TXT[l.vsP||""]}</td>
-      <td><button class="del" onclick="delLine('${g.id}','batting',${i})">✕</button></td></tr>`).join("");
-    const pitRows = (g.pitching||[]).map((l,i)=>`<tr>
+      <td style="white-space:nowrap"><button class="del edit-only" title="編輯" onclick="startEditLine('${g.id}','batting',${i})">✎</button><button class="del" onclick="delLine('${g.id}','batting',${i})">✕</button></td></tr>`;
+    }).join("");
+    const pitRows = (g.pitching||[]).map((l,i)=>{
+      if(editable && editLine && editLine.gid===g.id && editLine.type==="pitching" && editLine.i===i){
+        return `<tr class="edit-row">
+          <td class="l">${nameLink(l.pid)}</td>
+          <td><input value="${ipStr(l.outs)}" id="epIP-${g.id}-${i}" style="width:44px"></td>
+          ${["H","R","ER","BB","SO"].map(k=>`<td><input type="number" min="0" value="${l[k]||0}" id="ep${k}-${g.id}-${i}"></td>`).join("")}
+          <td style="white-space:nowrap"><input type="number" min="0" value="${l.GO||0}" id="epGO-${g.id}-${i}" style="width:38px">/<input type="number" min="0" value="${l.AO||0}" id="epAO-${g.id}-${i}" style="width:38px"></td>
+          <td><select id="epvsB-${g.id}-${i}"><option value=""${!l.vsB?" selected":""}>不明</option><option value="R"${l.vsB==="R"?" selected":""}>右</option><option value="L"${l.vsB==="L"?" selected":""}>左</option><option value="M"${l.vsB==="M"?" selected":""}>混</option></select></td>
+          <td class="num">-</td>
+          <td style="white-space:nowrap"><button class="btn sm" onclick="saveEditPitLine('${g.id}',${i})">✓存</button> <button class="del" onclick="cancelEditLine()">✕</button></td></tr>`;
+      }
+      return `<tr>
       <td class="l">${nameLink(l.pid)}</td><td class="num">${ipStr(l.outs)}</td><td class="num">${l.H}</td>
       <td class="num">${l.R}</td><td class="num">${l.ER}</td><td class="num">${l.BB}</td><td class="num">${l.SO}</td>
       <td class="num">${(l.GO||0)}/${(l.AO||0)}</td>
       <td>${VSB_TXT[l.vsB||""]}</td>
       <td class="num">${l.outs?f2(l.ER*eraBaseOf(g.level)*3/l.outs):"-"}</td>
-      <td><button class="del" onclick="delLine('${g.id}','pitching',${i})">✕</button></td></tr>`).join("");
+      <td style="white-space:nowrap"><button class="del edit-only" title="編輯" onclick="startEditLine('${g.id}','pitching',${i})">✎</button><button class="del" onclick="delLine('${g.id}','pitching',${i})">✕</button></td></tr>`;
+    }).join("");
     const comments = (g.comments||[]).map((c,i)=>`<div class="comment"><span class="t">${esc(c.t)}</span>${esc(c.text)}
       <button class="del" style="float:right" onclick="delComment('${g.id}',${i})">✕</button></div>`).join("");
     const cmtText = (g.comments||[]).map(c=>`${c.t} ${c.text}`).join("\n");
@@ -149,10 +173,10 @@ function renderGames(){
     const aiAw = g[aiKey];
     const offTag = offPid ? `<span class="gh-mvp">${awIcon} ${awShort} ${esc(playerName(offPid))}</span>` : "";
     const aiTag = aiAw ? `<span class="gh-mvp gh-ai">🤖 ${awShort} ${esc(aiAw.name||playerName(aiAw.pid))}</span>` : "";
-    return `<div class="game-card${openGames.has(g.id)?" open":""}" id="gc-${g.id}">
+    return `<div class="game-card${openGames.has(g.id)?" open":""}${editable?"":" noedit"}" id="gc-${g.id}">
       <div class="game-head" onclick="toggleGame('${g.id}')">
         <span class="gh-date">${g.date}</span>
-        <span class="gh-vs">${lvlBadge(g.level)} ${g.tour?`【${esc(g.tour)}】`:""} vs ${esc(g.opp)}${g.coach?` <span class="hint">· ${esc(g.coach)} 教練</span>`:""}</span>
+        <span class="gh-vs">${lvlBadge(g.level)}${squadBadge(g.squad)} ${g.tour?`【${esc(g.tour)}】`:""} vs ${esc(g.opp)}${g.coach?` <span class="hint">· ${esc(g.coach)} 教練</span>`:""}</span>
         ${offTag}${aiTag}
         <span class="gh-score">${g.us} : ${g.them}</span>
         <span class="res ${r}">${r==="W"?"勝":r==="L"?"敗":"和"}</span>
@@ -161,6 +185,12 @@ function renderGames(){
         <div class="frow" style="justify-content:space-between">
           <div class="frow edit-only">
             <div class="fld"><label>📅 比賽日期</label><input type="date" value="${g.date}" onchange="setGameDate('${g.id}',this.value)"></div>
+            <div class="fld"><label>階級</label><select onchange="setGameField('${g.id}','level',this.value)">${["U12","U15","其他"].map(x=>`<option ${g.level===x?"selected":""}>${x}</option>`).join("")}</select></div>
+            <div class="fld"><label>🎽 分隊</label><select onchange="setGameField('${g.id}','squad',this.value)"><option value=""${!g.squad?" selected":""}>未分隊</option>${["藍","白","紅"].map(s=>`<option value="${s}"${g.squad===s?" selected":""}>${s}隊</option>`).join("")}</select></div>
+            <div class="fld"><label>賽事名稱</label><input value="${esc(g.tour||"")}" placeholder="例：協會盃" style="width:110px" onchange="setGameField('${g.id}','tour',this.value)"></div>
+            <div class="fld"><label>對手</label><input value="${esc(g.opp)}" style="width:110px" onchange="setGameField('${g.id}','opp',this.value)"></div>
+            <div class="fld w60"><label>我方得分</label><input type="number" min="0" value="${g.us}" onchange="setGameField('${g.id}','us',this.value)"></div>
+            <div class="fld w60"><label>對方得分</label><input type="number" min="0" value="${g.them}" onchange="setGameField('${g.id}','them',this.value)"></div>
             <div class="fld"><label>${awIcon} 單場 ${awShort}（官方/教練選出）</label><select onchange="setGameAward('${g.id}','${awKey}',this.value)">${playerOptions(offPid, g.level)}</select></div>
             <div class="fld"><label>👔 帶隊教練</label><input list="coachList" value="${esc(g.coach||"")}" placeholder="教練姓名" style="width:100px" onchange="setGameCoach('${g.id}',this.value)"></div>
           </div>
