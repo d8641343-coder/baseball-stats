@@ -109,7 +109,7 @@ function playerOptions(sel, level){
     .slice().sort((a,b)=> ((a.level||"") === (level||"") ? -1 : 0))
     .map(p=>`<option value="${p.id}" ${p.id===sel?"selected":""}>${esc(p.num?p.num+" ":"")}${esc(p.name)}（${esc(p.level||"U12")}）</option>`).join("");
 }
-function toggleGame(id){ document.getElementById("gc-"+id).classList.toggle("open"); }
+function toggleGame(id){ const el=document.getElementById("gc-"+id); if(!el) return; if(openGames.has(id)){ openGames.delete(id); el.classList.remove("open"); } else { openGames.add(id); el.classList.add("open"); } }
 function renderGames(){
   const games = lvlGames().slice().reverse();
   if(!games.length){ document.getElementById("gameList").innerHTML = `<div class="empty">此階級尚無比賽。</div>`; return; }
@@ -149,7 +149,7 @@ function renderGames(){
     const aiAw = g[aiKey];
     const offTag = offPid ? `<span class="gh-mvp">${awIcon} ${awShort} ${esc(playerName(offPid))}</span>` : "";
     const aiTag = aiAw ? `<span class="gh-mvp gh-ai">🤖 ${awShort} ${esc(aiAw.name||playerName(aiAw.pid))}</span>` : "";
-    return `<div class="game-card" id="gc-${g.id}">
+    return `<div class="game-card${openGames.has(g.id)?" open":""}" id="gc-${g.id}">
       <div class="game-head" onclick="toggleGame('${g.id}')">
         <span class="gh-date">${g.date}</span>
         <span class="gh-vs">${lvlBadge(g.level)} ${g.tour?`【${esc(g.tour)}】`:""} vs ${esc(g.opp)}${g.coach?` <span class="hint">· ${esc(g.coach)} 教練</span>`:""}</span>
@@ -222,7 +222,7 @@ function renderGames(){
     </div>`;
   }).join("");
 }
-function openCard(gid){ const el=document.getElementById("gc-"+gid); if(el) el.classList.add("open"); }
+function openCard(gid){ openGames.add(gid); const el=document.getElementById("gc-"+gid); if(el) el.classList.add("open"); }
 
 /* ───────── 打擊 / 投球表 ───────── */
 function renderBatting(){
@@ -518,10 +518,5 @@ document.getElementById("aiScope").onchange = function(){
   document.getElementById("aiYear").value = now.getFullYear();
   showImpFormat();
   document.getElementById("permTab").style.display = "none";
-  storageOK = await checkStorage();
-  if(!storageOK){ showNoStorage(); return; }
-  await loadAuth();
-  if(!auth || !auth.adminHash){ showAuth("setup"); return; }
-  const r = await trySession();
-  if(r) enterAs(r); else showAuth("login");
+  initAuth();   // Firebase Google 登入 + 成員核准（auth.js），登入後由 onAuthStateChanged 接手
 })();

@@ -37,8 +37,8 @@ out = out.replace(/<script src="(js\/[\w.-]+\.js)"><\/script>/g, (m, p) => {
   count++;
   return "<script>\n/* ═══ " + p + " ═══ */\n" + code.trimEnd() + "\n</script>";
 });
-if (count !== 7) {
-  console.error(`錯誤:預期內嵌 7 個 js 檔,實際只處理了 ${count} 個(index.html 的 <script src> 標籤可能被改動)`);
+if (count !== 8) {
+  console.error(`錯誤:預期內嵌 8 個 js 檔,實際只處理了 ${count} 個(index.html 的 <script src> 標籤可能被改動)`);
   process.exit(1);
 }
 

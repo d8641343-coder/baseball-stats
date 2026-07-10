@@ -1,24 +1,11 @@
 /* ───────── 版本(每次發布前更新此處) ───────── */
-const APP_VERSION = "v1.3.1 · 2026-07-10";
+const APP_VERSION = "v1.4.0 · 2026-07-10";
 
-/* ───────── 儲存層相容墊片 ─────────
-   Claude Artifact 會注入 window.storage;在 GitHub Pages / 本機 / 其他環境沒有,
-   則用瀏覽器 localStorage 提供相同介面(get/set/delete),讓其餘程式碼完全不需改動。
-   注意:localStorage 上限約 5MB,球員照片(base64)過多時可能不足,屆時再評估外部儲存。*/
-if(typeof window !== "undefined" && !window.storage){
-  const KP = "warriors::";
-  window.storage = {
-    // 需回傳 {value:字串} 以對齊 Artifact 原生介面(load/loadAuth/trySession 都讀 r.value);查無則回 null
-    async get(key){ try{ const v = localStorage.getItem(KP+key); return v===null ? null : {value:v}; }catch(e){ return null; } },
-    async set(key, val){ localStorage.setItem(KP+key, val); return true; },
-    async delete(key){ try{ localStorage.removeItem(KP+key); }catch(e){} }
-  };
-}
-
-/* ───────── 狀態與儲存 ───────── */
+/* ───────── 狀態 ───────── */
 let state = { teamName:"親子勇士", eraBases:{U12:6,U15:7,"其他":9}, players:[], games:[], honors:[], scouts:[] };
 let win = { overview:"all", batting:"all", pitching:"all" };
 let lvl = "all";
+const openGames = new Set();   // 記住展開中的比賽卡片，讓即時同步重繪後仍保持展開
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,6);
 
 /* ───────── 權限系統 ───────── */
@@ -120,33 +107,57 @@ async function uploadMediaFile(input, gid){
     save(); renderAll(); openCard(gid); toast("照片已加入");
   }catch(e){ toast(photoErrMsg(e)); }
 }
-async function save(){
-  if(!canEdit()) return;
-  const json = JSON.stringify(state);
-  if(json.length > 4500000) toast("⚠️ 資料量接近儲存上限，建議刪除部分上傳照片、改用相簿連結");
-  try{ await window.storage.set("warriors-data", json, true); }
-  catch(e){ console.error("儲存失敗", e); toast("儲存失敗，請檢查網路後重試"); }
+/* ───────── Firestore 儲存層 ─────────
+   結構：teams/warriors（meta）+ players/games/honors/scouts 各自一個集合（每筆一份文件）。
+   讀取：subscribeAll() 對各集合下 onSnapshot → 即時回填 state 並重繪（多人自動同步）。
+   寫入：沿用既有各 CRUD 的「改 state + save()」寫法；save() 以「與上次同步後的差異」批次寫回
+        （只寫變動的文件、刪除被移除的文件），mutator 完全不需改動。*/
+const COLLS = ["players","games","honors","scouts"];
+let db = null, teamRef = null, _subscribed = false, _renderTimer = null;
+let _lastSync = { players:{}, games:{}, honors:{}, scouts:{}, meta:"" };
+function fs(){ if(!db && typeof firebase!=="undefined" && firebase.apps && firebase.apps.length){ db = firebase.firestore(); teamRef = db.doc("teams/warriors"); } return db; }
+function col(name){ return fs() && db.collection("teams/warriors/"+name); }
+function clean(x){ return JSON.parse(JSON.stringify(x)); }         // 去除 undefined / 函式，Firestore 才收
+function stableStr(v){                                            // 與鍵順序無關的字串，供差異比對
+  if(v===null || typeof v!=="object") return JSON.stringify(v===undefined?null:v);
+  if(Array.isArray(v)) return "["+v.map(stableStr).join(",")+"]";
+  return "{"+Object.keys(v).sort().map(k=>JSON.stringify(k)+":"+stableStr(v[k])).join(",")+"}";
 }
-async function load(){
+function scheduleRender(){ clearTimeout(_renderTimer); _renderTimer = setTimeout(()=>{ try{ renderAll(); renderPerm&&renderPerm(); }catch(e){ console.error(e); } }, 40); }
+function subscribeAll(){
+  if(_subscribed || !fs()) return; _subscribed = true;
+  teamRef.onSnapshot(d=>{
+    const m = d.exists ? d.data() : {};
+    state.teamName = m.teamName || "親子勇士";
+    state.eraBases = m.eraBases || {U12:6,U15:7,"其他":9};
+    _lastSync.meta = stableStr({teamName:state.teamName, eraBases:state.eraBases});
+    scheduleRender();
+  }, e=>console.error("meta 讀取失敗", e));
+  COLLS.forEach(name=>{
+    col(name).onSnapshot(s=>{
+      state[name] = s.docs.map(d=>d.data());
+      const map = {}; s.docs.forEach(d=>{ map[d.id] = stableStr(d.data()); });
+      _lastSync[name] = map;
+      scheduleRender();
+    }, e=>console.error(name+" 讀取失敗", e));
+  });
+}
+async function save(){
+  if(!canEdit() || !fs()) return;
   try{
-    const r = await window.storage.get("warriors-data", true);
-    if(r && r.value){ state = Object.assign(state, JSON.parse(r.value)); return; }
-  }catch(e){}
-  // 搬遷舊的個人資料（第一次啟用共用模式）
-  for(const key of ["warriors-data","team-data"]){
-    try{
-      const old = await window.storage.get(key);
-      if(old && old.value){
-        const d = JSON.parse(old.value);
-        state = Object.assign(state, d, {teamName:"親子勇士"});
-        state.honors = state.honors||[]; state.scouts = state.scouts||[];
-        state.players.forEach(p=>{ p.level = p.level||"U12"; p.photo = p.photo||""; });
-        state.games.forEach(g=>{ g.level = g.level||"U12"; });
-        if(canEdit()) await window.storage.set("warriors-data", JSON.stringify(state), true);
-        return;
-      }
-    }catch(e){}
-  }
+    const batch = db.batch(); let ops = 0;
+    COLLS.forEach(name=>{
+      const ref = col(name), arr = state[name] || [], want = {};
+      arr.forEach(x=>{ if(x && x.id) want[x.id] = stableStr(clean(x)); });
+      arr.forEach(x=>{ if(x && x.id && _lastSync[name][x.id] !== want[x.id]){ batch.set(ref.doc(x.id), clean(x)); ops++; } });
+      for(const id in _lastSync[name]){ if(!(id in want)){ batch.delete(ref.doc(id)); ops++; } }
+      _lastSync[name] = want;
+    });
+    const meta = { teamName: state.teamName||"親子勇士", eraBases: state.eraBases||{U12:6,U15:7,"其他":9} };
+    const metaStr = stableStr(meta);
+    if(metaStr !== _lastSync.meta){ batch.set(teamRef, meta, {merge:true}); _lastSync.meta = metaStr; ops++; }
+    if(ops) await batch.commit();   // 注意：單批上限 500 筆；一般編輯只有 1~2 筆
+  }catch(e){ console.error("儲存失敗", e); toast("儲存失敗："+(e.code||e.message||"請檢查網路")); }
 }
 
 /* ───────── 工具 ───────── */
@@ -400,10 +411,9 @@ async function resetAll(){
   if(!guardAdmin()) return;
   if(!await confirmBox("將清除全部球員、比賽、榮譽與數據，且無法復原。確定？")) return;
   if(!await confirmBox("再次確認：真的要清除全部資料嗎？")) return;
-  state = { teamName:"親子勇士", eraBases:{U12:6,U15:7,"其他":9}, players:[], games:[], honors:[], scouts:[] };
-  try{ await window.storage.delete("warriors-data", true); }catch(e){}
-  try{ await window.storage.delete("warriors-data"); }catch(e){}
-  try{ await window.storage.delete("team-data"); }catch(e){}
+  state.players = []; state.games = []; state.honors = []; state.scouts = [];
+  state.teamName = "親子勇士"; state.eraBases = {U12:6,U15:7,"其他":9};
+  await save();   // save() 會刪除所有現存文件（孤兒清除）；成員/權限不受影響
   renderAll(); toast("已清除");
 }
 

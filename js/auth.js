@@ -1,114 +1,79 @@
-let auth = null;       // 共用權限設定 {adminHash, editHash, viewHash}
-let role = null;       // 'admin' | 'editor' | 'viewer'
+/* ───────── 身分驗證：Firebase Google 登入 + 成員核准 ─────────
+   取代舊的三層共用密碼。所有人都要 Google 登入且經管理者核准才能檢視。
+   對外仍提供 role / canEdit / guardEdit / guardAdmin / enterAs / logout / renderPerm，
+   App 其餘程式呼叫方式不變。*/
+const OWNER_EMAIL = "d8641343@gmail.com";   // 初始管理者（第一次登入即為 admin）
+let role = null;            // 'admin' | 'editor' | 'viewer'
+let currentUser = null;    // firebase.User
+let membersList = [];      // 管理者用：成員清單
+let _membersUnsub = null;
 const ROLE_TXT = {admin:"管理者", editor:"編輯者", viewer:"唯讀成員"};
 function canEdit(){ return role==="admin" || role==="editor"; }
 function guardEdit(){ if(canEdit()) return true; toast("唯讀模式：需要編輯權限"); return false; }
 function guardAdmin(){ if(role==="admin") return true; toast("僅管理者可執行此操作"); return false; }
-async function sha256(s){
-  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("warriors::"+s));
-  return [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,"0")).join("");
-}
-async function loadAuth(){
-  try{
-    const r = await window.storage.get("warriors-auth", true);
-    if(r && r.value) auth = JSON.parse(r.value);
-  }catch(e){ auth = null; }
-}
-async function saveAuth(){
-  try{ await window.storage.set("warriors-auth", JSON.stringify(auth), true); return true; }
-  catch(e){ toast("權限設定儲存失敗"); return false; }
-}
-let storageOK = false;
-let demoMode = false;
-async function checkStorage(){
-  try{
-    if(!window.storage) return false;
-    await window.storage.set("warriors-probe", String(Date.now()));
-    try{ await window.storage.delete("warriors-probe"); }catch(e){}
-    return true;
-  }catch(e){ return false; }
-}
-function showNoStorage(){
-  const bg = document.getElementById("authBg");
-  const body = document.getElementById("authBody");
-  bg.style.display = "flex";
-  body.innerHTML = `
-    <div style="text-align:left;font-size:14px;background:#fdf3d7;border:1px solid #ecd48a;border-radius:8px;padding:12px;margin:10px 0">
-      <b>⚠️ 偵測不到雲端儲存服務</b><br><br>
-      這通常代表你目前是在<b>對話中的預覽視窗</b>或<b>下載到本機的檔案</b>開啟本工具。在這個環境下，密碼與比賽資料都無法儲存。<br><br>
-      <b>正確使用方式：</b><br>
-      1. 在 Claude 中按此工具右上角的「發佈」<br>
-      2. 從<b>發佈後的連結</b>重新開啟<br>
-      3. 再進行首次密碼設定與資料登錄<br><br>
-      之後把發佈連結＋觀看密碼公布在 LINE 群組即可。
-    </div>
-    <button class="btn ghost" onclick="enterDemo()">先以試用模式看看介面（資料不會儲存）</button>`;
-}
-async function enterDemo(){
-  demoMode = true;
-  auth = auth || {adminHash:"demo", editHash:"", viewHash:""};
-  await enterAs("admin");
-  document.getElementById("roleChip").innerHTML = `⚠️ <b>試用模式</b>：資料不會儲存，請從發佈後的連結開啟正式使用`;
-}
-function showAuth(mode){
-  const bg = document.getElementById("authBg");
-  const body = document.getElementById("authBody");
-  bg.style.display = "flex";
-  if(mode==="setup"){
-    body.innerHTML = `
-      <p style="font-size:14px;margin:8px 0">首次啟用，請由<b>管理者</b>設定管理密碼。編輯與觀看密碼可稍後在「權限管理」設定。</p>
-      <input type="password" id="auP1" placeholder="設定管理密碼（至少 4 碼）">
-      <input type="password" id="auP2" placeholder="再輸入一次確認">
-      <div class="auth-msg" id="auMsg"></div>
-      <button class="btn gold" onclick="doSetup()">建立並進入</button>`;
-  }else{
-    body.innerHTML = `
-      <p style="font-size:14px;margin:8px 0">請輸入密碼進入（管理／編輯／觀看密碼皆可）。</p>
-      <input type="password" id="auPw" placeholder="密碼" onkeydown="if(event.key==='Enter')doLogin()">
-      <div class="auth-msg" id="auMsg"></div>
-      <button class="btn gold" onclick="doLogin()">登入</button>
-      ${!auth.viewHash?`<button class="btn ghost" onclick="enterAs('viewer')" style="margin-top:8px">以唯讀模式瀏覽</button>`:""}`;
+
+function initAuth(){
+  if(typeof firebase==="undefined" || !firebase.apps || !firebase.apps.length){
+    showFatal("Firebase 初始化失敗，請確認 firebase-config.js 設定正確、且網路正常。");
+    return;
   }
-  setTimeout(()=>{ const el = document.getElementById(mode==="setup"?"auP1":"auPw"); if(el) el.focus(); }, 50);
+  firebase.auth().onAuthStateChanged(u => handleAuth(u));
 }
-async function doSetup(){
-  const p1 = document.getElementById("auP1").value, p2 = document.getElementById("auP2").value;
-  const msg = document.getElementById("auMsg");
-  if(p1.length < 4){ msg.textContent = "密碼至少 4 碼"; return; }
-  if(p1 !== p2){ msg.textContent = "兩次輸入不一致"; return; }
-  auth = { adminHash: await sha256(p1), editHash:"", viewHash:"", updated: Date.now() };
-  const ok = await saveAuth();
-  if(!ok){ msg.textContent = "儲存失敗：請確認是從「發佈後」的連結開啟本工具"; return; }
-  await setSession(auth.adminHash);
-  enterAs("admin");
-}
-async function doLogin(){
-  const pw = document.getElementById("auPw").value;
-  const msg = document.getElementById("auMsg");
-  if(!pw){ msg.textContent = "請輸入密碼"; return; }
-  const h = await sha256(pw);
-  let r = null;
-  if(h === auth.adminHash) r = "admin";
-  else if(auth.editHash && h === auth.editHash) r = "editor";
-  else if(auth.viewHash && h === auth.viewHash) r = "viewer";
-  if(!r){ msg.textContent = "密碼錯誤"; return; }
-  await setSession(h);
-  enterAs(r);
-}
-async function setSession(hash){
-  try{ await window.storage.set("warriors-session", JSON.stringify({h:hash})); }catch(e){}
-}
-async function trySession(){
+async function handleAuth(user){
+  currentUser = user;
+  if(!user){ role = null; document.body.classList.remove("admin","editor","viewer"); showLogin(); return; }
+  const memRef = firebase.firestore().doc("teams/warriors/members/"+user.uid);
   try{
-    const r = await window.storage.get("warriors-session");
-    if(!r || !r.value) return null;
-    const h = JSON.parse(r.value).h;
-    if(h === auth.adminHash) return "admin";
-    if(auth.editHash && h === auth.editHash) return "editor";
-    if(auth.viewHash && h === auth.viewHash) return "viewer";
-  }catch(e){}
-  return null;
+    const snap = await memRef.get();
+    let mem = snap.exists ? snap.data() : null;
+    if(user.email === OWNER_EMAIL && (!mem || mem.role!=="admin" || !mem.approved)){
+      // 擁有者一律確保為已核准的管理者（bootstrap，免手動建資料）
+      mem = { email:user.email, name:user.displayName||"", role:"admin", approved:true, created:(mem&&mem.created)||Date.now() };
+      await memRef.set(mem, {merge:true});
+    }else if(!mem){
+      // 新登入者：建立待核准的唯讀成員
+      mem = { email:user.email||"", name:user.displayName||"", role:"viewer", approved:false, created:Date.now() };
+      await memRef.set(mem);
+    }
+    if(!mem.approved){ showPending(user); return; }
+    await enterAs(mem.role);
+  }catch(e){
+    console.error(e);
+    showFatal("讀取成員資料失敗："+(e.code||e.message||"未知錯誤")+"。可能是 Firestore 安全規則尚未貼上。");
+  }
 }
+function authBody(html){
+  const bg = document.getElementById("authBg");
+  bg.style.display = "flex";
+  document.getElementById("authBody").innerHTML = html;
+}
+function showLogin(){
+  authBody(`
+    <p style="font-size:14px;margin:8px 0 14px">請用 Google 帳號登入。首次登入需經管理者核准後才能檢視球隊資料。</p>
+    <button class="btn gold" onclick="login()">🔑 使用 Google 登入</button>`);
+}
+function showPending(user){
+  authBody(`
+    <div style="text-align:left;font-size:14px;background:#fdf3d7;border:1px solid #ecd48a;border-radius:8px;padding:12px;margin:10px 0">
+      你已用 <b>${esc(user.email||"")}</b> 登入。<br><br>
+      帳號 <b>尚待管理者核准</b>，核准後重新整理即可檢視。請通知管理者到「權限管理」核准你。
+    </div>
+    <button class="btn ghost" onclick="logout()">換帳號 / 登出</button>`);
+}
+function showFatal(msg){
+  authBody(`<div style="text-align:left;font-size:14px;background:#fdecea;border:1px solid #f5c2c0;border-radius:8px;padding:12px;margin:10px 0">
+      <b>⚠️ 無法載入</b><br><br>${esc(msg)}</div>
+    <button class="btn ghost" onclick="location.reload()">重新整理</button>`);
+}
+function login(){
+  const provider = new firebase.auth.GoogleAuthProvider();
+  firebase.auth().signInWithPopup(provider).catch(e=>{
+    if(e && e.code==="auth/popup-closed-by-user") return;
+    toast("登入失敗："+(e.message||e.code||""));
+  });
+}
+function logout(){ if(_membersUnsub){ _membersUnsub(); _membersUnsub=null; } firebase.auth().signOut(); }
+
 async function enterAs(r){
   role = r;
   document.getElementById("authBg").style.display = "none";
@@ -116,50 +81,57 @@ async function enterAs(r){
   document.body.classList.add(r==="admin"?"admin":r==="editor"?"editor":"viewer");
   document.getElementById("permTab").style.display = r==="admin" ? "" : "none";
   document.getElementById("roleChip").innerHTML =
-    `身分：<b>${ROLE_TXT[r]}</b> · <button onclick="reloadData()" title="讀取其他人最新登錄的資料">🔄 更新資料</button> · <button onclick="logout()">登出</button>`;
-  await load();
-  state.scouts = state.scouts||[]; state.honors = state.honors||[];
-  renderAll(); renderPerm();
+    `身分：<b>${ROLE_TXT[r]}</b>${currentUser?`（${esc(currentUser.email||"")}）`:""} · <button onclick="logout()">登出</button>`;
+  subscribeAll();                 // 開始監聽 Firestore 資料（data.js）
+  if(r==="admin") subscribeMembers();
+  renderPerm();
   probeNet();
 }
-async function logout(){
-  try{ await window.storage.delete("warriors-session"); }catch(e){}
-  location.reload();
-}
-async function reloadData(){
-  await load();
-  state.scouts = state.scouts||[]; state.honors = state.honors||[];
-  renderAll(); toast("已載入最新資料");
-}
-async function setPw(kind){
-  if(!guardAdmin()) return;
-  const map = {edit:"pwEdit", view:"pwView", admin:"pwAdmin"};
-  const el = document.getElementById(map[kind]);
-  const pw = el.value;
-  if(pw.length < 4) return toast("密碼至少 4 碼");
-  const h = await sha256(pw);
-  if(kind==="admin") auth.adminHash = h;
-  if(kind==="edit") auth.editHash = h;
-  if(kind==="view") auth.viewHash = h;
-  auth.updated = Date.now();
-  await saveAuth();
-  if(kind==="admin") await setSession(h);
-  el.value = "";
-  renderPerm();
-  toast(kind==="admin"?"管理密碼已更換":kind==="edit"?"編輯密碼已設定，可私訊給指定人員":"觀看密碼已設定，可公布在群組記事本");
-}
-async function clearPw(kind){
-  if(!guardAdmin()) return;
-  if(!await confirmBox(kind==="edit"?"停用編輯密碼？現有編輯者將無法再登入編輯。":"停用觀看密碼？任何拿到連結的人都能唯讀瀏覽。")) return;
-  if(kind==="edit") auth.editHash = "";
-  if(kind==="view") auth.viewHash = "";
-  auth.updated = Date.now();
-  await saveAuth(); renderPerm(); toast("已停用");
+
+/* ───────── 成員管理（管理者） ───────── */
+function subscribeMembers(){
+  if(_membersUnsub) return;
+  _membersUnsub = firebase.firestore().collection("teams/warriors/members")
+    .onSnapshot(s => { membersList = s.docs.map(d => Object.assign({uid:d.id}, d.data())); renderPerm(); },
+                e => console.error("成員清單讀取失敗", e));
 }
 function renderPerm(){
-  const el = document.getElementById("pwStatus");
-  if(!el || role!=="admin" || !auth) return;
-  el.innerHTML = `目前狀態：管理密碼 ✅ ｜ 編輯密碼 ${auth.editHash?"✅ 已設定":"⛔ 未設定（僅管理者可編輯）"} ｜ 觀看密碼 ${auth.viewHash?"✅ 已設定（需密碼才能看）":"⚠️ 未設定（任何人可唯讀瀏覽）"}`;
+  const el = document.getElementById("memberList");
+  if(!el) return;
+  if(role !== "admin"){ el.innerHTML = ""; return; }
+  const order = {admin:0, editor:1, viewer:2};
+  const rows = membersList.slice().sort((a,b)=>
+    (a.approved?1:0)-(b.approved?1:0) || (order[a.role]??9)-(order[b.role]??9) || (a.created||0)-(b.created||0));
+  if(!rows.length){ el.innerHTML = `<div class="empty">目前只有你。把網址給隊友、請他用 Google 登入，就會出現在這裡等你核准。</div>`; return; }
+  el.innerHTML = `<div class="tblwrap"><table><thead><tr>
+      <th class="l">帳號</th><th>身分</th><th>狀態</th><th>操作</th></tr></thead><tbody>` +
+    rows.map(m=>{
+      const isOwner = m.email===OWNER_EMAIL;
+      const roleSel = isOwner ? `<b>管理者</b>` :
+        `<select onchange="setMemberRole('${m.uid}',this.value)">
+           <option value="viewer" ${m.role==="viewer"?"selected":""}>唯讀成員</option>
+           <option value="editor" ${m.role==="editor"?"selected":""}>編輯者</option>
+           <option value="admin" ${m.role==="admin"?"selected":""}>管理者</option></select>`;
+      const status = m.approved ? `<span class="res W" style="color:#fff">已核准</span>` : `<span class="res L" style="color:#fff">待核准</span>`;
+      const actions = isOwner ? `<span class="hint">擁有者</span>` :
+        `${m.approved ? "" : `<button class="btn gold sm" onclick="approveMember('${m.uid}')">核准</button> `}
+         <button class="btn warn sm" onclick="removeMember('${m.uid}')">移除</button>`;
+      return `<tr><td class="l">${esc(m.email||m.uid)}</td><td>${roleSel}</td><td>${status}</td><td>${actions}</td></tr>`;
+    }).join("") + `</tbody></table></div>`;
 }
-
-
+async function approveMember(uid){
+  if(!guardAdmin()) return;
+  try{ await firebase.firestore().doc("teams/warriors/members/"+uid).set({approved:true},{merge:true}); toast("已核准"); }
+  catch(e){ toast("核准失敗："+(e.code||e.message||"")); }
+}
+async function setMemberRole(uid, r){
+  if(!guardAdmin()) return;
+  try{ await firebase.firestore().doc("teams/warriors/members/"+uid).set({role:r, approved:true},{merge:true}); toast("已更新身分為 "+ROLE_TXT[r]); }
+  catch(e){ toast("更新失敗："+(e.code||e.message||"")); }
+}
+async function removeMember(uid){
+  if(!guardAdmin()) return;
+  if(!await confirmBox("移除此成員？之後他將無法再檢視資料（可重新登入後再由你核准）。")) return;
+  try{ await firebase.firestore().doc("teams/warriors/members/"+uid).delete(); toast("已移除"); }
+  catch(e){ toast("移除失敗："+(e.code||e.message||"")); }
+}

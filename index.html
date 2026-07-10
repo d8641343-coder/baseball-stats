@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>親子勇士 WARRIORS 攻守數據中心</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -299,26 +302,10 @@
 <section id="perm">
   <h2>權限管理（僅管理者）</h2>
   <div class="panel">
-    <p style="font-size:14px;margin-bottom:10px">三種身分：<b>管理者</b>（你）可編輯與管理密碼；<b>編輯者</b>輸入編輯密碼後可登錄數據；<b>一般成員</b>輸入觀看密碼後只能瀏覽。密碼建議只公布在 LINE 群組記事本，退群者換密碼即失效。</p>
-    <div id="pwStatus" style="font-size:14px;margin-bottom:12px"></div>
-    <div class="subhead">編輯密碼（給你指定的少數人）</div>
-    <div class="frow">
-      <input type="password" id="pwEdit" placeholder="新的編輯密碼" style="width:180px">
-      <button class="btn" onclick="setPw('edit')">設定 / 更換</button>
-      <button class="btn warn sm" onclick="clearPw('edit')">停用編輯密碼</button>
-    </div>
-    <div class="subhead">觀看密碼（LINE 群組成員）</div>
-    <div class="frow">
-      <input type="password" id="pwView" placeholder="新的觀看密碼" style="width:180px">
-      <button class="btn" onclick="setPw('view')">設定 / 更換</button>
-      <button class="btn warn sm" onclick="clearPw('view')">停用（任何人可唯讀）</button>
-    </div>
-    <div class="subhead">管理密碼</div>
-    <div class="frow">
-      <input type="password" id="pwAdmin" placeholder="新的管理密碼" style="width:180px">
-      <button class="btn" onclick="setPw('admin')">更換管理密碼</button>
-    </div>
-    <div class="hint" style="margin-top:12px">誠實提醒：密碼以雜湊方式儲存、不會明文顯示；更換後所有人須用新密碼重新登入。此保護足以防止一般成員誤改資料，但並非銀行等級的資安防線。</div>
+    <p style="font-size:14px;margin-bottom:10px">所有人都要用 <b>Google 帳號登入</b>並經你核准後才能檢視。三種身分：<b>管理者</b>可編輯並管理成員；<b>編輯者</b>可登錄／修改數據；<b>唯讀成員</b>只能瀏覽。新登入者預設為「待核准」，核准後才看得到資料。</p>
+    <div class="subhead">成員清單</div>
+    <div id="memberList" style="font-size:14px">載入中…</div>
+    <div class="hint" style="margin-top:12px">把網址給隊友 → 他用自己的 Google 登入 → 這裡就會出現待核准的他 → 你核准並指定身分。要停權某人，改成「移除」即可，之後他無法再檢視。</div>
   </div>
 </section>
 
@@ -332,6 +319,7 @@
 <div id="pdfStage" style="position:absolute;left:-10000px;top:0;width:794px;background:#fff"></div>
 <div class="toast" id="toast"></div>
 
+<script src="js/firebase-config.js"></script>
 <script src="js/data.js"></script>
 <script src="js/auth.js"></script>
 <script src="js/batting.js"></script>
