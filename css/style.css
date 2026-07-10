@@ -122,8 +122,9 @@ td.num{font-family:var(--mono)}
 .empty{padding:30px;text-align:center;color:var(--muted);background:#fff;border:1px dashed var(--line);border-radius:10px;margin:12px 0}
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--board);color:var(--gold);padding:10px 22px;border-radius:24px;font-size:14px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:99}
 .toast.show{opacity:1}
-.del{background:none;border:none;color:#c3bcae;font-size:14px}
+.del{background:none;border:none;color:#c3bcae;font-size:14px;padding:2px 4px;cursor:pointer}
 .del:hover{color:var(--red)}
+.del + .del{margin-left:8px}
 textarea{width:100%;min-height:60px;resize:vertical}
 
 /* 榮譽卡 */
