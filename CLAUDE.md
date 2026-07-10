@@ -92,20 +92,21 @@ js/ui.js              表格渲染、DOM 操作、事件綁定、Chart.js 繪圖
 // 投球: { gp, outs, H, R, ER, BB, SO, wER, GO, AO, ERA, WHIP, K9, BB9, GOAO }
 ```
 
-## 發布流程(Claude Artifact)
+## 發布流程(GitHub Pages)
 
-Claude Artifact 只接受單一 HTML 檔,平常開發用拆分後的檔案,發布時用 build script 合併回單檔:
+正式站由 **GitHub Pages** 代管(repo `d8641343-coder/baseball-stats`,master 分支根目錄,`.nojekyll`),網址 https://d8641343-coder.github.io/baseball-stats。Pages 直接服務**拆分後的** `index.html` + `css/` + `js/`(`index.html` 底部用 `<script src="js/*.js">` 載入),**不經過任何 build,不用合併單檔**。
 
-1. 更新 `js/data.js` 最上方的 `APP_VERSION`
-2. 執行 `node build.js` → 產出 `dist/index.html`(css + 7 個 js 依載入順序內嵌回單一 HTML,Chart.js CDN 保留)
-3. 更新已發布的 Claude Artifact(**更新同一個已發布的 Artifact**,`window.storage` 的舊資料才會沿用),依改動大小二選一:
-   - **補丁發布(預設,省 token)**:請 Claude Code 依上次發布以來的 git diff 產出「發布補丁-vX.Y.Z.md」——一份「舊字串→新字串」替換清單,開頭註明「不要重寫整個檔案,用 update 逐一套用」。把這份補丁(通常只有幾 KB)貼到 Artifact 對話,讓 claude.ai 的 Claude 局部替換。舊字串必須取自**上一版**的內容且在單檔中唯一。每次發布後 `git tag vX.Y.Z`,下次才有明確的 diff 基準。
-   - **全檔重貼(僅限首次建立、或補丁連續失準時)**:貼上 `dist/index.html` 完整內容。單檔約 24 萬字元,貼進對話與 Claude 重寫 Artifact 各燒一次,盡量避免。
-4. 開啟發布連結,核對登入畫面的版號是否為新版;版號沒變先 Ctrl+F5 強制重新整理再判斷
+發布步驟:
 
-`dist/` 是 build 產物,已列入 `.gitignore`,不進版控。build script 會驗證:css link 存在、恰好內嵌 7 個 js、js 內容不含 `</script>` 字串(會破壞 HTML)。
+1. 更新 `js/data.js` 最上方的 `APP_VERSION`(格式 `vX.Y.Z · YYYY-MM-DD`)
+2. `git commit` 改動的檔案 → `git push origin master`
+3. Pages 自動重新部署(約 1～2 分鐘)。開啟網址核對登入畫面版號是否為新版;版號沒變先 Ctrl+F5 強制重新整理再判斷
 
-**開發鐵則:所有程式修改一律在拆分後的檔案(css/、js/、index.html 骨架)上進行,絕對不要直接編輯 dist/index.html 或把合併後的單檔貼回來開發。** 單檔 25 萬字元,AI 協作時讀寫都極耗 token;拆分後每次只需讀寫相關模組。合併只發生在發布當下,由 build.js 自動完成。
+**開發鐵則:所有程式修改一律在拆分後的檔案(css/、js/、index.html 骨架)上進行。** 拆分後每次只需讀寫相關模組,AI 協作省 token。
+
+### `build.js` / `dist/` 現況(舊 Artifact 流程遺留,發布已不需要)
+
+`build.js` 會把 css + js 合併成單一 `dist/index.html`,是當初用 Claude Artifact 代管時為了「Artifact 只吃單檔」而寫的。**改用 GitHub Pages 後這一步已不在發布路徑上**——Pages 直接吃拆分檔。`dist/` 仍列在 `.gitignore`,不進版控。build script 目前仍可用(驗證 css link 存在、恰好內嵌 8 個 js、js 內容不含 `</script>` 字串),若哪天要重新產單檔備份可跑,但平常發布無須執行。
 
 ## 版號規則
 
