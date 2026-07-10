@@ -150,7 +150,7 @@ async function setPw(kind){
 }
 async function clearPw(kind){
   if(!guardAdmin()) return;
-  if(!confirm(kind==="edit"?"停用編輯密碼？現有編輯者將無法再登入編輯。":"停用觀看密碼？任何拿到連結的人都能唯讀瀏覽。")) return;
+  if(!await confirmBox(kind==="edit"?"停用編輯密碼？現有編輯者將無法再登入編輯。":"停用觀看密碼？任何拿到連結的人都能唯讀瀏覽。")) return;
   if(kind==="edit") auth.editHash = "";
   if(kind==="view") auth.viewHash = "";
   auth.updated = Date.now();

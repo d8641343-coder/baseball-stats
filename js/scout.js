@@ -338,6 +338,52 @@ function statsDigest(games){
   });
   return s;
 }
+function gameBoxDigest(g){
+  let s = `本隊 ${g.us} : ${g.them} 對手 ${g.opp}\n`;
+  if((g.batting||[]).length){
+    s += "打擊（姓名：打數,安打,二安,三安,全壘打,四死,得分,打點,三振,盜壘）\n";
+    g.batting.forEach(l=>{ const p = getP(l.pid); if(!p) return;
+      s += `${p.name}：${l.AB},${l.H},${l.d2},${l.d3},${l.HR},${l.BB},${l.R},${l.RBI},${l.SO},${l.SB}\n`; });
+  }
+  if((g.pitching||[]).length){
+    s += "投球（姓名：局數,被安打,失分,自責分,四死,三振,滾地,飛球）\n";
+    g.pitching.forEach(l=>{ const p = getP(l.pid); if(!p) return;
+      s += `${p.name}：${ipStr(l.outs)},${l.H},${l.R},${l.ER},${l.BB},${l.SO},${l.GO||0},${l.AO||0}\n`; });
+  }
+  return s;
+}
+async function aiPickGameMvp(gid){
+  if(!guardEdit()) return;
+  const g = state.games.find(x=>x.id===gid); if(!g) return;
+  if(!(g.batting||[]).length && !(g.pitching||[]).length) return toast("本場尚無球員數據，請先登錄打擊/投球");
+  const r = gameResult(g);
+  const isWin = r !== "L";
+  const awShort = isWin ? "MVP" : "SVP";
+  const aiKey = isWin ? "aiMvp" : "aiSvp";
+  const btn = document.getElementById("aiAwBtn-"+gid);
+  if(btn){ btn.disabled = true; btn.innerHTML = `<span class="spinner"></span>AI 評選中…`; }
+  try{
+    const resultTxt = r==="W"?"本隊獲勝":r==="T"?"雙方平手":"本隊落敗";
+    const prompt = `你是少棒/青棒球隊的數據分析師。以下是「${state.teamName}」一場比賽（${g.date}，對 ${g.opp}，${resultTxt} ${g.us}:${g.them}）的單場數據。
+請從本隊球員中評選一位「單場 ${awShort}」（${isWin?"獲勝／平手方最有價值球員":"落敗方表現最突出的球員"}），可綜合打擊與投球貢獻。
+${gameBoxDigest(g)}
+只回傳 JSON，不要任何其他文字或 markdown 標記，格式：
+{"name":"球員姓名或null","reason":"40字內理由"}
+若資料不足以評選，name 填 null 並在 reason 說明。`;
+    const text = await callClaude(prompt);
+    const clean = text.replace(/```json|```/g,"").trim();
+    const rj = JSON.parse(clean);
+    if(!rj.name){ toast("AI 判斷本場資料不足以評選"); if(btn){ btn.disabled=false; btn.textContent=`🤖 AI 選出單場 ${awShort}`; } return; }
+    const p = state.players.find(x=>x.name===rj.name);
+    g[aiKey] = { pid: p?p.id:null, name: rj.name, reason: rj.reason||"" };
+    save(); renderAll(); openCard(gid);
+    toast(`AI 單場 ${awShort}：${rj.name}`);
+  }catch(e){
+    console.error(e);
+    toast("AI 評選失敗："+(e.message||"未知錯誤"));
+    if(btn){ btn.disabled=false; btn.textContent = `🤖 AI 選出單場 ${awShort}`; }
+  }
+}
 async function aiPickMVP(){
   const scope = document.getElementById("aiScope").value;
   let period, games;

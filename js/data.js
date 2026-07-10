@@ -1,5 +1,5 @@
 /* ───────── 版本(每次發布前更新此處) ───────── */
-const APP_VERSION = "v1.2.1 · 2026-07-09";
+const APP_VERSION = "v1.3.0 · 2026-07-10";
 
 /* ───────── 狀態與儲存 ───────── */
 let state = { teamName:"親子勇士", eraBases:{U12:6,U15:7,"其他":9}, players:[], games:[], honors:[], scouts:[] };
@@ -152,10 +152,10 @@ function addPlayer(){
   pendingAvatar = ""; document.getElementById("pPhotoState").textContent = "";
   save(); renderAll(); toast("已加入 "+name);
 }
-function delPlayer(id){
+async function delPlayer(id){
   if(!guardEdit()) return;
   const used = state.games.some(g => (g.batting||[]).some(l=>l.pid===id) || (g.pitching||[]).some(l=>l.pid===id));
-  if(!confirm(used?"此球員已有比賽數據，移除後數據仍保留但顯示為（已移除）。確定移除？":"確定移除此球員？")) return;
+  if(!await confirmBox(used?"此球員已有比賽數據，移除後數據仍保留但顯示為（已移除）。確定移除？":"確定移除此球員？")) return;
   state.players = state.players.filter(p=>p.id!==id);
   save(); renderAll();
 }
@@ -170,13 +170,13 @@ function addGame(){
     coach:document.getElementById("gCoach").value.trim(),
     us:Number(document.getElementById("gUs").value)||0,
     them:Number(document.getElementById("gThem").value)||0,
-    mvp:"", svp:"", batting:[], pitching:[], comments:[], media:[] });
+    mvp:"", svp:"", aiMvp:null, aiSvp:null, batting:[], pitching:[], comments:[], media:[] });
   document.getElementById("gOpp").value="";
   save(); renderAll(); toast("已建立比賽");
 }
-function delGame(id){
+async function delGame(id){
   if(!guardEdit()) return;
-  if(!confirm("刪除整場比賽與其所有數據？")) return;
+  if(!await confirmBox("刪除整場比賽與其所有數據？")) return;
   state.games = state.games.filter(g=>g.id!==id);
   save(); renderAll();
 }
@@ -184,6 +184,13 @@ function setGameCoach(gid, name){
   if(!guardEdit()) return;
   const g = state.games.find(x=>x.id===gid); if(!g) return;
   g.coach = name.trim(); save(); renderAll(); openCard(gid);
+}
+function setGameDate(gid, val){
+  if(!guardEdit()) return;
+  const g = state.games.find(x=>x.id===gid); if(!g) return;
+  const d = normDate(val);
+  if(!d) return toast("日期格式不正確");
+  g.date = d; save(); renderAll(); openCard(gid);
 }
 function coachNames(){
   return [...new Set(state.games.map(g=>(g.coach||"").trim()).filter(Boolean))];
@@ -193,6 +200,12 @@ function setGameAward(gid, key, pid){
   const g = state.games.find(x=>x.id===gid); if(!g) return;
   g[key] = pid; save(); renderAll(); openCard(gid);
   if(pid) toast((key==="mvp"?"單場 MVP：":"單場 SVP：")+playerName(pid));
+}
+async function clearAiAward(gid){
+  if(!guardEdit()) return;
+  const g = state.games.find(x=>x.id===gid); if(!g) return;
+  if(!await confirmBox("清除本場 AI 評選結果？")) return;
+  g.aiMvp = null; g.aiSvp = null; save(); renderAll(); openCard(gid);
 }
 function addBatLine(gid){
   if(!guardEdit()) return;
@@ -242,22 +255,22 @@ function addMedia(gid){
 }
 function delMedia(gid,i){
   if(!guardEdit()) return; const g=state.games.find(x=>x.id===gid); g.media.splice(i,1); save(); renderAll(); openCard(gid); }
-function editPhoto(pid){
+async function editPhoto(pid){
   if(!guardEdit()) return;
   const p = getP(pid); if(!p) return;
-  const url = prompt("貼上大頭照網址（清空可移除）：", p.photo||"");
+  const url = await promptBox("貼上大頭照網址（清空可移除）：", p.photo||"");
   if(url===null) return;
   p.photo = url.trim(); save(); renderAll(); openProfile(pid);
 }
-function editPlayer(pid){
+async function editPlayer(pid){
   if(!guardEdit()) return;
   const p = getP(pid); if(!p) return;
-  const name = prompt("姓名：", p.name); if(name===null) return;
-  const num = prompt("背號：", p.num||""); if(num===null) return;
-  const pos = prompt("守位：", p.pos||""); if(pos===null) return;
-  const level = prompt("階級（U12 / U15 / 其他）：", p.level||"U12"); if(level===null) return;
-  const throws = prompt("投（右 / 左，留空為不明）：", p.throws||""); if(throws===null) return;
-  const bats = prompt("打（右 / 左 / 兩，留空為不明）：", p.bats||""); if(bats===null) return;
+  const name = await promptBox("姓名：", p.name); if(name===null) return;
+  const num = await promptBox("背號：", p.num||""); if(num===null) return;
+  const pos = await promptBox("守位：", p.pos||""); if(pos===null) return;
+  const level = await promptBox("階級（U12 / U15 / 其他）：", p.level||"U12"); if(level===null) return;
+  const throws = await promptBox("投（右 / 左，留空為不明）：", p.throws||""); if(throws===null) return;
+  const bats = await promptBox("打（右 / 左 / 兩，留空為不明）：", p.bats||""); if(bats===null) return;
   if(name.trim()) p.name = name.trim();
   p.num = num.trim(); p.pos = pos.trim();
   p.level = ["U12","U15","其他"].includes(level.trim()) ? level.trim() : p.level;
@@ -357,11 +370,11 @@ function importJSON(input){
   if(!guardEdit()) return;
   const file = input.files[0]; if(!file) return;
   const reader = new FileReader();
-  reader.onload = () => {
+  reader.onload = async () => {
     try{
       const data = JSON.parse(reader.result);
       if(!Array.isArray(data.players) || !Array.isArray(data.games)) throw new Error("格式不符");
-      if(!confirm("匯入將覆蓋目前的資料，確定繼續？")) return;
+      if(!await confirmBox("匯入將覆蓋目前的資料，確定繼續？")) return;
       data.honors = data.honors||[]; data.scouts = data.scouts||[];
       state = data; save(); renderAll(); toast("匯入完成");
     }catch(e){ toast("匯入失敗：檔案格式不正確"); }
@@ -371,8 +384,8 @@ function importJSON(input){
 }
 async function resetAll(){
   if(!guardAdmin()) return;
-  if(!confirm("將清除全部球員、比賽、榮譽與數據，且無法復原。確定？")) return;
-  if(!confirm("再次確認：真的要清除全部資料嗎？")) return;
+  if(!await confirmBox("將清除全部球員、比賽、榮譽與數據，且無法復原。確定？")) return;
+  if(!await confirmBox("再次確認：真的要清除全部資料嗎？")) return;
   state = { teamName:"親子勇士", eraBases:{U12:6,U15:7,"其他":9}, players:[], games:[], honors:[], scouts:[] };
   try{ await window.storage.delete("warriors-data", true); }catch(e){}
   try{ await window.storage.delete("warriors-data"); }catch(e){}
@@ -415,30 +428,30 @@ function delKeyPlayer(sid,i){
   const sc = state.scouts.find(s=>s.id===sid); if(!sc) return;
   sc.keyPlayers.splice(i,1); save(); renderAll(); gotoScout(sid);
 }
-function editScout(sid){
+async function editScout(sid){
   if(!guardEdit()) return;
   const sc = state.scouts.find(s=>s.id===sid); if(!sc) return;
-  const summary = prompt("整體觀察：", sc.summary||""); if(summary===null) return;
-  const strategy = prompt("應對建議：", sc.strategy||""); if(strategy===null) return;
+  const summary = await promptBox("整體觀察：", sc.summary||""); if(summary===null) return;
+  const strategy = await promptBox("應對建議：", sc.strategy||""); if(strategy===null) return;
   sc.summary = summary.trim(); sc.strategy = strategy.trim();
   save(); renderAll(); gotoScout(sid);
 }
-function delScout(sid){
+async function delScout(sid){
   if(!guardEdit()) return;
-  if(!confirm("刪除此份情蒐報告？")) return;
+  if(!await confirmBox("刪除此份情蒐報告？")) return;
   state.scouts = state.scouts.filter(s=>s.id!==sid);
   save(); renderAll();
 }
-function saveHonor(json){
+async function saveHonor(json){
   if(!guardEdit()) return;
   const h = JSON.parse(json);
   const dup = state.honors.find(x=>x.type===h.type && x.period===h.period && x.level===h.level);
-  if(dup && !confirm("此期間已有評選紀錄，要再新增一筆嗎？")) return;
+  if(dup && !await confirmBox("此期間已有評選紀錄，要再新增一筆嗎？")) return;
   state.honors.push(h); save(); renderAll(); toast("已存入榮譽榜");
 }
-function delHonor(id){
+async function delHonor(id){
   if(!guardEdit()) return;
-  if(!confirm("刪除此筆榮譽紀錄？")) return;
+  if(!await confirmBox("刪除此筆榮譽紀錄？")) return;
   state.honors = state.honors.filter(h=>h.id!==id);
   save(); renderAll();
 }

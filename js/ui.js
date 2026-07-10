@@ -139,20 +139,29 @@ function renderGames(){
       return `<div class="media-item">${inner}<div class="cap">${isImg?"":`<a href="${esc(m.url)}" target="_blank" rel="noopener">開啟連結</a><br>`}${esc(m.cap)||""}
         <button class="del" style="float:right" onclick="delMedia('${g.id}',${i})">✕</button></div></div>`;
     }).join("");
-    const mvpTag = g.mvp ? `<span class="gh-mvp">⭐ MVP ${esc(playerName(g.mvp))}</span>` : "";
+    // 勝或和 → 單場 MVP；敗 → 單場 SVP（依比賽結果自動分流）
+    const isWin = r !== "L";
+    const awKey = isWin ? "mvp" : "svp";
+    const aiKey = isWin ? "aiMvp" : "aiSvp";
+    const awShort = isWin ? "MVP" : "SVP";
+    const awIcon = isWin ? "⭐" : "🥈";
+    const offPid = g[awKey];
+    const aiAw = g[aiKey];
+    const offTag = offPid ? `<span class="gh-mvp">${awIcon} ${awShort} ${esc(playerName(offPid))}</span>` : "";
+    const aiTag = aiAw ? `<span class="gh-mvp gh-ai">🤖 ${awShort} ${esc(aiAw.name||playerName(aiAw.pid))}</span>` : "";
     return `<div class="game-card" id="gc-${g.id}">
       <div class="game-head" onclick="toggleGame('${g.id}')">
         <span class="gh-date">${g.date}</span>
         <span class="gh-vs">${lvlBadge(g.level)} ${g.tour?`【${esc(g.tour)}】`:""} vs ${esc(g.opp)}${g.coach?` <span class="hint">· ${esc(g.coach)} 教練</span>`:""}</span>
-        ${mvpTag}
+        ${offTag}${aiTag}
         <span class="gh-score">${g.us} : ${g.them}</span>
         <span class="res ${r}">${r==="W"?"勝":r==="L"?"敗":"和"}</span>
       </div>
       <div class="game-body">
         <div class="frow" style="justify-content:space-between">
           <div class="frow edit-only">
-            <div class="fld"><label>⭐ 單場 MVP</label><select onchange="setGameAward('${g.id}','mvp',this.value)">${playerOptions(g.mvp, g.level)}</select></div>
-            <div class="fld"><label>🥈 單場 SVP</label><select onchange="setGameAward('${g.id}','svp',this.value)">${playerOptions(g.svp, g.level)}</select></div>
+            <div class="fld"><label>📅 比賽日期</label><input type="date" value="${g.date}" onchange="setGameDate('${g.id}',this.value)"></div>
+            <div class="fld"><label>${awIcon} 單場 ${awShort}（官方/教練選出）</label><select onchange="setGameAward('${g.id}','${awKey}',this.value)">${playerOptions(offPid, g.level)}</select></div>
             <div class="fld"><label>👔 帶隊教練</label><input list="coachList" value="${esc(g.coach||"")}" placeholder="教練姓名" style="width:100px" onchange="setGameCoach('${g.id}',this.value)"></div>
           </div>
           <div class="frow" style="gap:8px">
@@ -160,6 +169,12 @@ function renderGames(){
             <button class="btn ghost sm" onclick="copyGameReport('${g.id}')">複製單場戰報</button>
             <button class="btn warn sm" onclick="delGame('${g.id}')">刪除比賽</button>
           </div>
+        </div>
+        <div class="ai-award">
+          ${aiAw
+            ? `<span class="gh-mvp gh-ai">🤖 AI 單場 ${awShort}：<b>${esc(aiAw.name||playerName(aiAw.pid))}</b></span><span class="ai-reason">${esc(aiAw.reason||"")}</span><button class="del edit-only" title="清除 AI 評選" onclick="clearAiAward('${g.id}')">✕</button>`
+            : `<span class="hint">尚無 AI 評選的單場 ${awShort}。</span>`}
+          <button class="btn ghost sm edit-only" id="aiAwBtn-${g.id}" onclick="aiPickGameMvp('${g.id}')">🤖 AI 選出單場 ${awShort}</button>
         </div>
 
         <div class="subhead">打擊登錄（四死球含觸身球）</div>
@@ -381,12 +396,14 @@ function renderScouts(){
 }
 function renderHonors(){
   // 單場 MVP 列表
-  const gm = lvlGames().filter(g=>g.mvp||g.svp).slice().reverse();
+  const gm = lvlGames().filter(g=>g.mvp||g.svp||g.aiMvp||g.aiSvp).slice().reverse();
+  const aiCell = a => a ? `${a.pid?nameLink(a.pid):esc(a.name)}${a.reason?`<span class="hint" title="${esc(a.reason)}"> ⓘ</span>`:""}` : "-";
   document.getElementById("gameMvpList").innerHTML = gm.length ? `<div class="tblwrap"><table>
-    <thead><tr><th>日期</th><th class="l">對戰</th><th>比分</th><th class="l">⭐ MVP</th><th class="l">🥈 SVP</th></tr></thead>
+    <thead><tr><th>日期</th><th class="l">對戰</th><th>比分</th><th class="l">⭐ MVP</th><th class="l">🥈 SVP</th><th class="l">🤖 AI 評選</th></tr></thead>
     <tbody>${gm.map(g=>`<tr><td class="num">${g.date}</td><td class="l">${lvlBadge(g.level)} ${g.tour?`【${esc(g.tour)}】`:""}vs ${esc(g.opp)}</td>
       <td class="num">${g.us}:${g.them}</td>
-      <td class="l">${g.mvp?nameLink(g.mvp):"-"}</td><td class="l">${g.svp?nameLink(g.svp):"-"}</td></tr>`).join("")}</tbody></table></div>`
+      <td class="l">${g.mvp?nameLink(g.mvp):"-"}</td><td class="l">${g.svp?nameLink(g.svp):"-"}</td>
+      <td class="l">${aiCell(g.aiMvp||g.aiSvp)}</td></tr>`).join("")}</tbody></table></div>`
     : `<div class="empty">尚未選出任何單場 MVP，可在比賽卡片中選取。</div>`;
   // AI 榮譽榜
   const hs = state.honors.filter(h=> lvl==="all" || h.level==="all" || h.level===lvl).slice().reverse();
@@ -421,6 +438,49 @@ function toast(msg){
   const t = document.getElementById("toast");
   t.textContent = msg; t.classList.add("show");
   setTimeout(()=>t.classList.remove("show"), 2400);
+}
+/* 內建對話框：取代原生 confirm()/prompt()（在 Artifact 沙箱 iframe 會被封鎖而失效）。回傳 Promise。 */
+function confirmBox(msg, opts={}){
+  return new Promise(resolve=>{
+    const bg = document.createElement("div");
+    bg.className = "dlg-bg";
+    bg.innerHTML = `<div class="dlg" role="alertdialog">
+      <div class="dlg-msg">${esc(msg)}</div>
+      <div class="dlg-actions">
+        <button class="btn ghost sm" data-act="cancel">${esc(opts.cancelText||"取消")}</button>
+        <button class="btn ${opts.danger===false?"gold":"warn"} sm" data-act="ok">${esc(opts.okText||"確定")}</button>
+      </div></div>`;
+    document.body.appendChild(bg);
+    const done = v => { bg.remove(); resolve(v); };
+    bg.addEventListener("click", e=>{
+      const act = e.target.getAttribute && e.target.getAttribute("data-act");
+      if(act==="ok") done(true);
+      else if(act==="cancel" || e.target===bg) done(false);
+    });
+  });
+}
+function promptBox(msg, def="", opts={}){
+  return new Promise(resolve=>{
+    const bg = document.createElement("div");
+    bg.className = "dlg-bg";
+    bg.innerHTML = `<div class="dlg" role="dialog">
+      <div class="dlg-msg">${esc(msg)}</div>
+      <input type="text" value="${esc(def)}">
+      <div class="dlg-actions">
+        <button class="btn ghost sm" data-act="cancel">${esc(opts.cancelText||"取消")}</button>
+        <button class="btn gold sm" data-act="ok">${esc(opts.okText||"確定")}</button>
+      </div></div>`;
+    document.body.appendChild(bg);
+    const input = bg.querySelector("input");
+    const done = v => { bg.remove(); resolve(v); };
+    input.focus();
+    input.addEventListener("keydown", e=>{ if(e.key==="Enter") done(input.value); });
+    bg.addEventListener("click", e=>{
+      const act = e.target.getAttribute && e.target.getAttribute("data-act");
+      if(act==="ok") done(input.value);
+      else if(act==="cancel" || e.target===bg) done(null);
+    });
+  });
 }
 document.querySelectorAll(".tab").forEach(b => b.onclick = () => {
   document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));
