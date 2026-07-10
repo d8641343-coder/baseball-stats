@@ -1,5 +1,19 @@
 /* ───────── 版本(每次發布前更新此處) ───────── */
-const APP_VERSION = "v1.3.0 · 2026-07-10";
+const APP_VERSION = "v1.3.1 · 2026-07-10";
+
+/* ───────── 儲存層相容墊片 ─────────
+   Claude Artifact 會注入 window.storage;在 GitHub Pages / 本機 / 其他環境沒有,
+   則用瀏覽器 localStorage 提供相同介面(get/set/delete),讓其餘程式碼完全不需改動。
+   注意:localStorage 上限約 5MB,球員照片(base64)過多時可能不足,屆時再評估外部儲存。*/
+if(typeof window !== "undefined" && !window.storage){
+  const KP = "warriors::";
+  window.storage = {
+    // 需回傳 {value:字串} 以對齊 Artifact 原生介面(load/loadAuth/trySession 都讀 r.value);查無則回 null
+    async get(key){ try{ const v = localStorage.getItem(KP+key); return v===null ? null : {value:v}; }catch(e){ return null; } },
+    async set(key, val){ localStorage.setItem(KP+key, val); return true; },
+    async delete(key){ try{ localStorage.removeItem(KP+key); }catch(e){} }
+  };
+}
 
 /* ───────── 狀態與儲存 ───────── */
 let state = { teamName:"親子勇士", eraBases:{U12:6,U15:7,"其他":9}, players:[], games:[], honors:[], scouts:[] };
