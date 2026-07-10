@@ -61,8 +61,35 @@ function authBody(html){
   bg.style.display = "flex";
   document.getElementById("authBody").innerHTML = html;
 }
+// 偵測 App 內建瀏覽器（LINE / FB / IG 等）。Google 政策禁止這類 webview 做 OAuth 登入
+// （錯誤 403: disallowed_useragent），須改用系統瀏覽器 Chrome / Safari。
+function isInAppBrowser(){
+  const ua = navigator.userAgent || "";
+  if(/FBAN|FBAV|FB_IAB|Instagram|Line\b|MicroMessenger|Twitter|KAKAOTALK|; wv\)|GSA\//i.test(ua)) return true;
+  // Android WebView：有 "wv" 標記；iOS App 內嵌 WebView：是 Safari 引擎但沒有 "Safari" 字樣
+  if(/Android/.test(ua) && /Version\/[\d.]+/.test(ua)) return true;
+  if(/iPhone|iPad|iPod/.test(ua) && !/Safari/.test(ua) && !/CriOS|FxiOS|EdgiOS/.test(ua)) return true;
+  return false;
+}
+function copyLoginUrl(){
+  const url = location.href;
+  (navigator.clipboard ? navigator.clipboard.writeText(url) : Promise.reject())
+    .then(()=>toast("已複製網址，貼到 Chrome / Safari 開啟"))
+    .catch(()=>{ if(typeof promptBox==="function") promptBox("複製這串網址，貼到 Chrome / Safari 開啟：", url); else toast(url); });
+}
 function showLogin(){
+  const warn = isInAppBrowser() ? `
+    <div style="text-align:left;font-size:14px;background:#fdecea;border:1px solid #f5c2c0;border-radius:8px;padding:12px;margin:0 0 12px">
+      <b>⚠️ 目前是 App 內建瀏覽器</b><br><br>
+      Google 基於安全政策，禁止在 <b>LINE／Facebook／IG</b> 等 App 的內建瀏覽器登入（會出現錯誤 <b>403: disallowed_useragent</b>）。<br><br>
+      請改用系統瀏覽器開啟本頁：<br>
+      1. 點畫面右上角的「<b>⋯</b>」選單<br>
+      2. 選「<b>用預設瀏覽器開啟</b>」（Chrome / Safari）<br>
+      3. 再按下方的 Google 登入
+      <div style="margin-top:10px"><button class="btn ghost sm" onclick="copyLoginUrl()">📋 複製本頁網址</button></div>
+    </div>` : "";
   authBody(`
+    ${warn}
     <p style="font-size:14px;margin:8px 0 14px">請用 Google 帳號登入。首次登入需經管理者核准後才能檢視球隊資料。</p>
     <button class="btn gold" onclick="login()">🔑 使用 Google 登入</button>`);
 }
