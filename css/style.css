@@ -94,6 +94,7 @@ td.num{font-family:var(--mono)}
 .game-head{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:12px 14px;cursor:pointer;background:linear-gradient(#fff,#faf8f1)}
 .game-head:hover{background:#f2f4f9}
 .gh-date{font-family:var(--mono);font-size:13px;color:var(--muted);min-width:86px}
+.gh-time{color:var(--navy);font-weight:700}
 .gh-vs{font-weight:700;font-size:15px;flex:1;min-width:150px}
 .gh-score{font-family:var(--mono);font-size:18px;font-weight:700}
 .gh-mvp{font-size:12px;color:#8a6410;background:#fdf3d7;border-radius:12px;padding:2px 10px}

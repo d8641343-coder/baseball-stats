@@ -1,5 +1,5 @@
 /* ───────── 版本(每次發布前更新此處) ───────── */
-const APP_VERSION = "v1.5.3 · 2026-07-10";
+const APP_VERSION = "v1.6.0 · 2026-07-10";
 
 /* ───────── 狀態 ───────── */
 let state = { teamName:"親子勇士", eraBases:{U12:6,U15:7,"其他":9}, players:[], games:[], honors:[], scouts:[] };
@@ -27,17 +27,24 @@ function normDate(s){
   if(!m) return null;
   return `${m[1]}-${m[2].padStart(2,"0")}-${m[3].padStart(2,"0")}`;
 }
-function sortedGames(){ return [...state.games].sort((a,b)=> a.date.localeCompare(b.date) || (a.created||0)-(b.created||0)); }
+function sortedGames(){ return [...state.games].sort((a,b)=> a.date.localeCompare(b.date) || (a.time||"").localeCompare(b.time||"") || (a.created||0)-(b.created||0)); }
 function lvlGames(){ return sortedGames().filter(g => lvl==="all" || (g.level||"U12")===lvl); }
-function windowGames(w){
-  const g = lvlGames();
-  return w==="all" ? g : g.slice(-Number(w));
+// 依區間切片：all=全部；1m=近一個月（依日期）；數字=近 N 場
+function sliceWindow(g, w){
+  if(w==="all") return g;
+  if(w==="1m"){
+    const c = new Date(); c.setMonth(c.getMonth()-1);
+    const cut = `${c.getFullYear()}-${String(c.getMonth()+1).padStart(2,"0")}-${String(c.getDate()).padStart(2,"0")}`;
+    return g.filter(x => x.date >= cut);
+  }
+  return g.slice(-Number(w));
 }
-// 球隊近況專用：先套用階級與分隊篩選，再取近 N 場
+function windowGames(w){ return sliceWindow(lvlGames(), w); }
+// 球隊近況專用：先套用階級與分隊篩選，再依區間切片
 function overviewGames(){
   let g = lvlGames();
   if(ovSquad!=="all") g = g.filter(x => (x.squad||"")===ovSquad);
-  return win.overview==="all" ? g : g.slice(-Number(win.overview));
+  return sliceWindow(g, win.overview);
 }
 function gameResult(g){ return g.us>g.them ? "W" : g.us<g.them ? "L" : "T"; }
 function mvpCounts(pid){
@@ -198,7 +205,8 @@ function addGame(){
   const date = document.getElementById("gDate").value;
   const opp = document.getElementById("gOpp").value.trim();
   if(!date || !opp) return toast("請填日期與對手");
-  state.games.push({ id:uid(), created:Date.now(), date, opp,
+  state.games.push({ id:uid(), created:Date.now(), date,
+    time:document.getElementById("gTime").value, opp,
     level,
     squad:document.getElementById("gSquad").value,
     tour:document.getElementById("gTour").value.trim(),
@@ -233,6 +241,7 @@ function setGameField(gid, field, val){
   const g = state.games.find(x=>x.id===gid); if(!g) return;
   if(!guardEdit(g.level)) return;
   if(field==="us" || field==="them") g[field] = Math.max(0, Number(val)||0);
+  else if(field==="time"){ const t = String(val).trim(); if(t && !/^\d{1,2}:\d{2}$/.test(t)) return toast("時間格式不正確"); g.time = t; }
   else if(field==="level"){ if(!["U12","U15","其他"].includes(val)) return; if(!guardEdit(val)) return; g.level = val; }
   else if(field==="squad") g.squad = ["藍","白","紅"].includes(val) ? val : "";
   else if(field==="opp"){ const o = String(val).trim(); if(!o) return toast("對手不可空白"); g.opp = o; }
@@ -380,7 +389,7 @@ function findOrCreatePlayer(name, level){
 }
 function findOrCreateGame(date, opp, level){
   let g = state.games.find(g=>g.date===date && g.opp===opp);
-  if(!g){ g = {id:uid(), created:Date.now(), date, opp, level:level||"U12", squad:"", tour:"", coach:"", us:0, them:0, mvp:"", svp:"", batting:[], pitching:[], comments:[], media:[]}; state.games.push(g); }
+  if(!g){ g = {id:uid(), created:Date.now(), date, time:"", opp, level:level||"U12", squad:"", tour:"", coach:"", us:0, them:0, mvp:"", svp:"", batting:[], pitching:[], comments:[], media:[]}; state.games.push(g); }
   return g;
 }
 function runImport(){

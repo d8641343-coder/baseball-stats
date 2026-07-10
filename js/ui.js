@@ -175,7 +175,7 @@ function renderGames(){
     const aiTag = aiAw ? `<span class="gh-mvp gh-ai">🤖 ${awShort} ${esc(aiAw.name||playerName(aiAw.pid))}</span>` : "";
     return `<div class="game-card${openGames.has(g.id)?" open":""}${editable?"":" noedit"}" id="gc-${g.id}">
       <div class="game-head" onclick="toggleGame('${g.id}')">
-        <span class="gh-date">${g.date}</span>
+        <span class="gh-date">${g.date}${g.time?` <span class="gh-time">${esc(g.time)}</span>`:""}</span>
         <span class="gh-vs">${lvlBadge(g.level)}${squadBadge(g.squad)} ${g.tour?`【${esc(g.tour)}】`:""} vs ${esc(g.opp)}${g.coach?` <span class="hint">· ${esc(g.coach)} 教練</span>`:""}</span>
         ${offTag}${aiTag}
         <span class="gh-score">${g.us} : ${g.them}</span>
@@ -185,6 +185,7 @@ function renderGames(){
         <div class="frow" style="justify-content:space-between">
           <div class="frow edit-only">
             <div class="fld"><label>📅 比賽日期</label><input type="date" value="${g.date}" onchange="setGameDate('${g.id}',this.value)"></div>
+            <div class="fld"><label>🕒 比賽時間</label><input type="time" value="${g.time||""}" onchange="setGameField('${g.id}','time',this.value)"></div>
             <div class="fld"><label>階級</label><select onchange="setGameField('${g.id}','level',this.value)">${["U12","U15","其他"].map(x=>`<option ${g.level===x?"selected":""}>${x}</option>`).join("")}</select></div>
             <div class="fld"><label>🎽 分隊</label><select onchange="setGameField('${g.id}','squad',this.value)"><option value=""${!g.squad?" selected":""}>未分隊</option>${["藍","白","紅"].map(s=>`<option value="${s}"${g.squad===s?" selected":""}>${s}隊</option>`).join("")}</select></div>
             <div class="fld"><label>賽事名稱</label><input value="${esc(g.tour||"")}" placeholder="例：協會盃" style="width:110px" onchange="setGameField('${g.id}','tour',this.value)"></div>
