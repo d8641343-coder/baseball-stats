@@ -112,8 +112,8 @@ function playerOptions(sel, level){
 }
 function toggleGame(id){ const el=document.getElementById("gc-"+id); if(!el) return; if(openGames.has(id)){ openGames.delete(id); el.classList.remove("open"); } else { openGames.add(id); el.classList.add("open"); } }
 function renderGames(){
-  // 依比賽日期排序、最近的排最前面（同日再依建立時間，新的在前）
-  const games = lvlGames().slice().sort((a,b)=> b.date.localeCompare(a.date) || (b.created||0)-(a.created||0));
+  // 依比賽日期時間排序、最近的排最前面（同日再依時間，再依建立時間，新的在前）
+  const games = lvlGames().slice().sort((a,b)=> b.date.localeCompare(a.date) || (b.time||"").localeCompare(a.time||"") || (b.created||0)-(a.created||0));
   if(!games.length){ document.getElementById("gameList").innerHTML = `<div class="empty">此階級尚無比賽。</div>`; return; }
   document.getElementById("gameList").innerHTML = games.map(g=>{
     const r = gameResult(g);
