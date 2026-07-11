@@ -443,7 +443,7 @@ function openProfile(pid){
         <button class="btn sm ghost edit-only" onclick="editPlayer('${pid}')">編輯基本資料</button>
         <button class="btn sm gold edit-only" id="advBtn" onclick="aiPlayerAdvice('${pid}')">🤖 AI 個人分析與建議</button>
       </div>
-      <div id="advOut"></div>
+      <div id="advOut">${p.aiAdvice ? aiAdviceHTML(p.aiAdvice) : ""}</div>
       <div class="subhead">生涯打擊</div>${batCards}
       <div class="subhead">生涯投球</div>${pitCards}
       <div class="subhead">左右拆分</div>

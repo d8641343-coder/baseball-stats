@@ -536,11 +536,16 @@ async function aiPlayerAdvice(pid){
     if(p5) d += `近5場投球：${ipStr(p5.outs)} 局，ERA ${p5.ERA===Infinity?"INF":f2(p5.ERA)}，${p5.SO} K，${p5.BB} 四死。\n`;
     const prompt = `你是親切的青少棒球隊教練兼數據分析師。根據以下球員數據，用繁體中文寫一段給球員與家長看的分析（250字內）：包含 1)近況與亮點 2)可加強之處 3)一個具體練習建議。語氣正面鼓勵、以成長為導向，不要用表格或markdown符號，直接輸出文字。\n${d}`;
     const text = await callClaude(prompt, false, "advice");
-    document.getElementById("advOut").innerHTML = `<div class="ai-out">${esc(text.trim())}</div>`;
+    p.aiAdvice = { text: text.trim(), created: Date.now() };
+    await save();
+    document.getElementById("advOut").innerHTML = aiAdviceHTML(p.aiAdvice);
   }catch(e){
     document.getElementById("advOut").innerHTML = `<div class="ai-out">分析失敗：${esc(e.message||"未知錯誤")}，請稍後再試。</div>`;
   }
   btn.disabled = false; btn.textContent = "🤖 AI 個人分析與建議";
+}
+function aiAdviceHTML(adv){
+  return `<div class="ai-out">${esc(adv.text)}</div><div class="hint" style="margin-top:4px">AI 分析日期：${new Date(adv.created).toLocaleDateString("zh-TW")}</div>`;
 }
 
 /* ───────── AI 判斷自責分 ───────── */
