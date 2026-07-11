@@ -6,6 +6,12 @@ const PROXIES = [
 ];
 
 let netOK = null; // null=未測, true/false
+// 「就是棒」myscore.games 等成績網站基於隱私會把球員姓名中間字元遮蔽成 O（例：吳丞淏→吳O淏），
+// 2 字姓名沒有統一遮蔽慣例，不處理
+function maskMiddleName(name){
+  if(!name || name.length < 3) return null;
+  return name[0] + "O".repeat(name.length - 2) + name[name.length - 1];
+}
 const SCOUT_JSON_SPEC = `只回傳 JSON，不要任何其他文字或 markdown，格式：
 {"found":true或false,"summary":"對手近況與打法風格，100字內","keyPlayers":[{"name":"姓名或背號","role":"投手或打者或其他","hand":"左或右或不明（投手指投、打者指打）","note":"需要留意的原因與特徵，40字內"}],"strategy":"我方應對建議，80字內","sources":"資料來源簡述，40字內"}
 找不到可靠資訊時 found 填 false，summary 說明查詢狀況，keyPlayers 給空陣列，不可以編造球員或數據。`;
@@ -82,8 +88,10 @@ async function callClaude(prompt, useWeb, feature){
   let text = "", inTok = 0, outTok = 0;
   try{
     for(let round = 0; round < 2; round++){
-      const body = { model, max_tokens:1000, messages };
-      if(useWeb) body.tools = [{type:webTool, name:"web_search"}];
+      const body = { model, max_tokens:1600, messages };
+      // max_uses 封頂單次呼叫的搜尋輪數：每多搜一次就要把前面全部結果重送一次當 input，
+      // 不設上限容易被沒查到精準資料時瘋狂換關鍵字搜到爆量 token
+      if(useWeb) body.tools = [{type:webTool, name:"web_search", max_uses:4}];
       const res = await fetch("https://api.anthropic.com/v1/messages", {
         method:"POST",
         headers:{
@@ -226,6 +234,8 @@ async function gatherScoutIntel(targets, league, hint, setStatus){
   queries.push(targets.join(" ") + " 棒球" + (league ? " " + league : ""));
   queries.push(main + " 棒球 新聞" + (hint ? " " + hint : ""));
   if(targets[1]) queries.push(targets[1] + " 棒球" + (league ? " " + league : ""));
+  const maskedMain = maskMiddleName(main);   // 就是棒等網站可能把姓名中間字元遮蔽成 O，一併查遮蔽寫法
+  if(maskedMain) queries.push(maskedMain + " 棒球" + (league ? " " + league : ""));
   const seen = {}, results = [], diag = [];
   for(const q of queries){
     setStatus("搜尋中：" + q.slice(0, 18));
@@ -261,7 +271,9 @@ function buildScoutPrompt(){
   const who = mode === "player"
     ? `棒球選手「${player}」${opp?`（所屬球隊：${opp}）`:""}`
     : `棒球隊「${opp}」`;
-  return `請幫我做賽前情蒐：請用網路搜尋公開資訊（就是棒 myscore.games、賽事官網、新聞報導），調查台灣的${who}${league?`，賽事/聯盟：${league}`:""}${hint?`，補充線索：${hint}`:""}。我的球隊是「親子勇士」，即將與其對戰。
+  const masked = mode === "player" ? maskMiddleName(player) : null;
+  const maskHint = masked ? `就是棒等網站基於隱私可能把姓名中間字元遮蔽成 O，此人可能顯示為「${masked}」，請也嘗試搜尋這個寫法並視為同一人。` : "";
+  return `請幫我做賽前情蒐：請用網路搜尋公開資訊（就是棒 myscore.games、賽事官網、新聞報導），調查台灣的${who}${league?`，賽事/聯盟：${league}`:""}${hint?`，補充線索：${hint}`:""}。${maskHint}我的球隊是「親子勇士」，即將與其對戰。
 請整理：近況與風格、需要留意的指標球員（含左右投打）與原因、我方應對建議。
 最後請「只」輸出一個 JSON 程式碼區塊（不要其他文字），格式：
 {"found":true或false,"summary":"近況與風格100字內","keyPlayers":[{"name":"姓名","role":"投手或打者或其他","hand":"左或右或不明","note":"留意原因40字內"}],"strategy":"應對建議80字內","sources":"資料來源40字內"}
@@ -313,13 +325,17 @@ async function aiScout(){
   btn.disabled = true; setStatus("搜尋整理中…");
   document.getElementById("scOut").innerHTML = "";
   try{
+    const masked = mode === "player" ? maskMiddleName(player) : null;
+    const maskHint = masked
+      ? `「就是棒」myscore.games 等成績網站基於隱私會把姓名中間字元遮蔽成 O，這位選手可能顯示為「${masked}」，請也嘗試用這個寫法搜尋，並視為同一人。`
+      : "";
     const taskDesc = mode === "player"
-      ? `調查台灣的棒球選手「${player}」${opp?`（所屬球隊：${opp}）`:""}。我方球隊「${state.teamName}」即將與這位選手對戰，請整理：角色（投手/打者）、左右投打、近期表現與特徵、需要留意的原因，以及我方應對建議。keyPlayers 以這位選手為主，同隊其他值得留意者可一併列入。`
+      ? `調查台灣的棒球選手「${player}」${opp?`（所屬球隊：${opp}）`:""}。${maskHint}我方球隊「${state.teamName}」即將與這位選手對戰，請整理：角色（投手/打者）、左右投打、近期表現與特徵、需要留意的原因，以及我方應對建議。keyPlayers 以這位選手為主，同隊其他值得留意者可一併列入。`
       : `調查台灣的棒球隊「${opp}」。我方球隊「${state.teamName}」即將與他們對戰，請整理：對手近況與打法風格、需要留意的指標球員（投手與打者）與原因、以及我方應對建議。`;
     let text = null;
     // 方案一：內建網路搜尋
     try{
-      text = await callClaude(`你是棒球隊的賽前情蒐分析師。請用網路搜尋公開資訊，包含聯盟/賽事成績網站（如「就是棒」）與新聞報導，可用不同關鍵字多次搜尋。${league?`賽事/聯盟：${league}。`:""}${hint?`補充線索：${hint}。`:""}
+      text = await callClaude(`你是棒球隊的賽前情蒐分析師。請用網路搜尋公開資訊，包含聯盟/賽事成績網站（如「就是棒」）與新聞報導，最多搜尋 2~3 次、盡量一次下精準關鍵字，查不到就直接回報 found:false，不要一直換關鍵字重試。${league?`賽事/聯盟：${league}。`:""}${hint?`補充線索：${hint}。`:""}
 ${taskDesc}
 ${SCOUT_JSON_SPEC}`, true, "scout");
     }catch(e1){
