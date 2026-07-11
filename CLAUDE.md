@@ -12,8 +12,9 @@ js/auth.js           登入/權限(admin/editor/viewer)、密碼雜湊、session
 js/batting.js        打擊統計聚合與計算(AVG/OBP/SLG/OPS)
 js/pitching.js       投手統計聚合與計算(ERA/WHIP/K9/BB9/GOAO)
 js/fielding.js        目前空殼,無獨立守備統計(GO/AO 併入 pitching)
-js/scout.js           AI 情蒐、球探報告 PDF、匯入格式、對外連線/代理抓取
+js/scout.js           AI 情蒐、AI 設定/配額閘門(aiGate)、球探報告 PDF、匯入格式、對外連線/代理抓取
 js/ui.js              表格渲染、DOM 操作、事件綁定、Chart.js 繪圖、進場初始化 IIFE
+firestore.rules       Firestore 安全規則備份(實際生效版本在 Firebase Console)
 ```
 
 **載入順序不可調整**(`index.html` 底部):
@@ -81,10 +82,13 @@ js/ui.js              表格渲染、DOM 操作、事件綁定、Chart.js 繪圖
   keyPlayers: {name, role, hand, note}[], strategy, sources }
 ```
 
-**auth**(獨立存於 storage,非 state 內)
-```js
-{ adminHash, editHash, viewHash, updated }
-```
+**Firestore 其他集合**(不在 state 內):
+- `teams/warriors/members/{uid}` — 成員:`{ email, name, role, approved, editLevels?, created }`
+- `teams/warriors/config/ai` — AI 設定:`{ apiKey, model, editorDaily, updated }`(管理者在「權限管理→AI 功能設定」維護;規則限 admin 寫、admin/editor 讀)
+- `teams/warriors/aiUsage/{uid}_{feature}_{yyyymmdd}` — 編輯者每日 AI 用量計數(transaction 累加,`aiGate()` 檢查)
+- `teams/warriors/logs/{id}` — 系統紀錄:`{ id, type: "login"|"ai"|"edit", t, uid, email, msg }`(`logEvent()` 寫入;規則:成員可新增、僅 admin 可讀)
+
+完整安全規則在 repo 根目錄 `firestore.rules`(**僅供比對參考,實際生效要貼到 Firebase Console → Firestore → 規則**;改規則時兩邊要同步)。
 
 聚合統計物件(`battingAgg`/`finishBat`、`pitchingAgg`/`finishPit` 的回傳值,**不儲存,每次即時計算**):
 ```js
@@ -146,5 +150,5 @@ js/ui.js              表格渲染、DOM 操作、事件綁定、Chart.js 繪圖
 4. **非 module 全域作用域**:所有檔案共享同一全域 scope,純粹靠 `<script src>` 載入順序維持正確性,沒有 import/export,新增檔案或調整順序都有風險,IDE 也無法做跨檔案的型別/引用檢查。
 5. **inline `onclick="xxx()"` 遍布 HTML 字串**:render 函式產生的 HTML 大量內嵌 `onclick`,表示所有可能被呼叫的函式都必須維持全域可見,無法安全地做作用域封裝或改成 ES module。
 6. **`js/fielding.js` 是空殼**:目前沒有獨立守備統計(失誤、守備率等),`pos` 只是名冊欄位,GO/AO 算在投手數據裡。若未來要做真正的守備統計,需要重新設計資料結構(比賽層級可能要新增 fielding 記錄)。
-7. **AI/情蒐/PDF 功能(`js/scout.js`)相依外部服務**:`callClaude()` 呼叫 Claude API,情蒐抓取靠公開 CORS 代理列表(`PROXIES`)接力嘗試,代理失效會直接影響情蒐功能,沒有重試/降級以外的容錯機制。
+7. **AI/情蒐/PDF 功能(`js/scout.js`)相依外部服務**:`callClaude()` 用管理者設定的 API Key 瀏覽器直連 `api.anthropic.com`(需 `anthropic-dangerous-direct-browser-access` 標頭啟用 CORS);情蒐備援抓取靠公開 CORS 代理列表(`PROXIES`)接力嘗試,代理失效會影響「網頁分析」與備援搜尋。**已知取捨**:API Key 存 Firestore 且編輯者可讀(呼叫必須),表示編輯者技術上可繞過每日次數限制——次數管控是防誤用不是防惡意,真要防須改走 Cloudflare Worker 等後端代理。每個 AI 功能入口先過 `aiGate(feature)`(身分→Key→編輯者每日配額),`callClaude(prompt, useWeb, feature)` 成功/失敗都寫 `logEvent("ai", ...)`。
 8. ~~兩個大型 base64 圖片內嵌在 `index.html`~~(v1.2.1 已瘦身)。登入圖與隊徽是同一張 200×203 PNG(各約 5.4 萬字元 base64、40KB),alpha 全不透明。已在 v1.2.1 用 Pillow 重新編碼:縮到 192px(對應登入畫面 96px 顯示的 2× retina)、flatten 白底轉 RGB、存成 JPEG q88,各約 1.4 萬字元;`dist/index.html` 從 243KB 降到 175KB。**兩張圖仍完全相同且仍各存一份(未去重)**——若要再省一份約 1.4 萬字元,可把 data URI 抽成單一 JS 常數、進場時設給兩個 `<img>.src`;但需注意 `js/scout.js` 的 PDF 產生器會讀 `.sb-logo` 的 `src`,登入畫面圖也要在進場即設好避免閃爍。重新編碼的 Python 腳本邏輯:讀 PNG→`convert("RGBA")`→白底 `paste`→`resize((192,195),LANCZOS)`→`save(JPEG,quality=88,optimize=True)`。

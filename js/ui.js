@@ -386,7 +386,7 @@ function openProfile(pid){
         <label class="btn sm ghost edit-only" style="display:inline-flex;align-items:center">📷 上傳大頭照<input type="file" accept="image/*,.heic,.heif" style="display:none" onchange="uploadAvatarFor(this,'${pid}')"></label>
         <button class="btn sm ghost edit-only" onclick="editPhoto('${pid}')">用網址設定</button>
         <button class="btn sm ghost edit-only" onclick="editPlayer('${pid}')">編輯基本資料</button>
-        <button class="btn sm gold" id="advBtn" onclick="aiPlayerAdvice('${pid}')">🤖 AI 個人分析與建議</button>
+        <button class="btn sm gold edit-only" id="advBtn" onclick="aiPlayerAdvice('${pid}')">🤖 AI 個人分析與建議</button>
       </div>
       <div id="advOut"></div>
       <div class="subhead">生涯打擊</div>${batCards}

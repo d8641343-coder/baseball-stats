@@ -319,6 +319,39 @@
     <div id="memberList" style="font-size:14px">載入中…</div>
     <div class="hint" style="margin-top:12px">把網址給隊友 → 他用自己的 Google 登入 → 這裡就會出現待核准的他 → 你核准並指定身分。要停權某人，改成「移除」即可，之後他無法再檢視。</div>
   </div>
+
+  <h2>AI 功能設定</h2>
+  <div class="panel">
+    <p style="font-size:14px;margin-bottom:10px">AI 功能（網路情蒐、網頁分析、判定自責分、評選 MVP、個人分析）需要 <b>Anthropic API Key</b> 才能運作，費用依實際用量從你的 Anthropic 帳戶扣。Key 只存在 Firestore、僅管理者與編輯者可讀取。功能僅開放<b>管理者</b>與<b>編輯者</b>；編輯者每個功能每天限用下方設定的次數，管理者不受限。</p>
+    <div class="frow">
+      <div class="fld" style="flex:1;min-width:240px"><label>Anthropic API Key（填入才會更換，留空表示不變）</label>
+        <input type="password" id="aiKeyInput" placeholder="sk-ant-api03-..." autocomplete="off"></div>
+      <span class="hint" id="aiKeyState" style="align-self:flex-end;padding-bottom:8px">載入中…</span>
+    </div>
+    <div class="frow" style="margin-top:8px">
+      <div class="fld"><label>AI 模型</label><select id="aiModelSel" style="min-width:190px"></select></div>
+      <div class="fld"><label>編輯者每日次數（每個功能）</label><input type="number" id="aiDailyInput" min="0" max="99" style="width:90px"></div>
+      <button class="btn gold" onclick="saveAiConf()">儲存 AI 設定</button>
+      <button class="btn warn sm" onclick="clearAiKey()">移除 Key（停用 AI）</button>
+    </div>
+    <div class="hint" style="margin-top:8px">取得 Key：到 <b>console.anthropic.com</b> 註冊 → Billing 儲值（最低 5 美元）→ API Keys 建立一把貼到上方。建議同時在 Console 設定每月用量上限。「編輯者每日次數」填 0 = 不開放編輯者使用。</div>
+  </div>
+
+  <h2>系統紀錄</h2>
+  <div class="panel">
+    <p style="font-size:14px;margin-bottom:10px">登入、AI 呼叫與資料編輯都會留下紀錄，只有管理者看得到。</p>
+    <div class="frow">
+      <div class="fld"><label>類型</label>
+        <select id="logTypeSel">
+          <option value="">全部</option>
+          <option value="login">登入</option>
+          <option value="ai">AI 呼叫</option>
+          <option value="edit">資料編輯</option>
+        </select></div>
+      <button class="btn" onclick="loadLogs()">載入 / 重新整理</button>
+    </div>
+    <div id="logList" style="margin-top:10px;font-size:13px"><div class="hint">按「載入」查看最近紀錄。</div></div>
+  </div>
 </section>
 
 </main>

@@ -113,7 +113,11 @@ function login(){
     toast("登入失敗："+(e.message||e.code||""));
   });
 }
-function logout(){ if(_membersUnsub){ _membersUnsub(); _membersUnsub=null; } firebase.auth().signOut(); }
+function logout(){
+  if(_membersUnsub){ _membersUnsub(); _membersUnsub=null; }
+  if(typeof _aiConfUnsub !== "undefined" && _aiConfUnsub){ _aiConfUnsub(); _aiConfUnsub=null; }
+  firebase.auth().signOut();
+}
 
 async function enterAs(r){
   role = r;
@@ -125,6 +129,12 @@ async function enterAs(r){
     `身分：<b>${ROLE_TXT[r]}</b>${currentUser?`（${esc(currentUser.email||"")}）`:""} · <button onclick="logout()">登出</button>`;
   subscribeAll();                 // 開始監聽 Firestore 資料（data.js）
   if(r==="admin") subscribeMembers();
+  if(typeof subscribeAiConf === "function") subscribeAiConf();   // AI 設定（scout.js，admin/editor）
+  // 登入紀錄：同一瀏覽器分頁工作階段只記一次，重新整理不重複記
+  if(!sessionStorage.getItem("wr-logged")){
+    sessionStorage.setItem("wr-logged", "1");
+    logEvent("login", `以「${ROLE_TXT[r]}」身分登入`);
+  }
   renderPerm();
   probeNet();
 }
@@ -167,24 +177,116 @@ function renderPerm(){
       return `<tr><td class="l">${esc(m.email||m.uid)}</td><td>${roleSel}</td><td>${lvlSel}</td><td>${status}</td><td>${actions}</td></tr>`;
     }).join("") + `</tbody></table></div>`;
 }
+function memberEmail(uid){ const m = membersList.find(x=>x.uid===uid); return m ? (m.email||uid) : uid; }
 async function approveMember(uid){
   if(!guardAdmin()) return;
-  try{ await firebase.firestore().doc("teams/warriors/members/"+uid).set({approved:true},{merge:true}); toast("已核准"); }
+  try{
+    await firebase.firestore().doc("teams/warriors/members/"+uid).set({approved:true},{merge:true});
+    toast("已核准"); logEvent("edit", `核准成員 ${memberEmail(uid)}`);
+  }
   catch(e){ toast("核准失敗："+(e.code||e.message||"")); }
 }
 async function setMemberRole(uid, r){
   if(!guardAdmin()) return;
-  try{ await firebase.firestore().doc("teams/warriors/members/"+uid).set({role:r, approved:true},{merge:true}); toast("已更新身分為 "+ROLE_TXT[r]); }
+  try{
+    await firebase.firestore().doc("teams/warriors/members/"+uid).set({role:r, approved:true},{merge:true});
+    toast("已更新身分為 "+ROLE_TXT[r]); logEvent("edit", `成員 ${memberEmail(uid)} 身分改為 ${ROLE_TXT[r]}`);
+  }
   catch(e){ toast("更新失敗："+(e.code||e.message||"")); }
 }
 async function setMemberLevels(uid, v){
   if(!guardAdmin()) return;
-  try{ await firebase.firestore().doc("teams/warriors/members/"+uid).set({editLevels:v},{merge:true}); toast("已更新可編輯階級為 "+(v==="ALL"?"全部":v)); }
+  try{
+    await firebase.firestore().doc("teams/warriors/members/"+uid).set({editLevels:v},{merge:true});
+    toast("已更新可編輯階級為 "+(v==="ALL"?"全部":v)); logEvent("edit", `成員 ${memberEmail(uid)} 可編輯階級改為 ${v}`);
+  }
   catch(e){ toast("更新失敗："+(e.code||e.message||"")); }
 }
 async function removeMember(uid){
   if(!guardAdmin()) return;
   if(!await confirmBox("移除此成員？之後他將無法再檢視資料（可重新登入後再由你核准）。")) return;
-  try{ await firebase.firestore().doc("teams/warriors/members/"+uid).delete(); toast("已移除"); }
+  const em = memberEmail(uid);
+  try{
+    await firebase.firestore().doc("teams/warriors/members/"+uid).delete();
+    toast("已移除"); logEvent("edit", `移除成員 ${em}`);
+  }
   catch(e){ toast("移除失敗："+(e.code||e.message||"")); }
+}
+
+/* ───────── AI 功能設定（管理者） ─────────
+   設定存 teams/warriors/config/ai：{ apiKey, model, editorDaily, updated }。
+   editorDaily = 編輯者「每個 AI 功能」的每日可呼叫次數（0 = 不開放）；管理者不受限。*/
+function renderAiConf(){
+  const st = document.getElementById("aiKeyState");
+  if(!st || role !== "admin") return;
+  if(aiConf && aiConf.apiKey){
+    st.innerHTML = `✅ 已設定（sk-ant-…${esc(String(aiConf.apiKey).slice(-4))}）`;
+  }else{
+    st.innerHTML = `⚠️ 尚未設定，AI 功能停用中`;
+  }
+  const sel = document.getElementById("aiModelSel");
+  if(sel && document.activeElement !== sel){
+    sel.innerHTML = AI_MODELS.map(m=>`<option value="${m.id}">${m.label}</option>`).join("");
+    sel.value = (aiConf && aiConf.model) || "claude-sonnet-4-6";
+    if(!sel.value) sel.value = "claude-sonnet-4-6";
+  }
+  const daily = document.getElementById("aiDailyInput");
+  if(daily && document.activeElement !== daily){
+    daily.value = (aiConf && aiConf.editorDaily !== undefined) ? aiConf.editorDaily : 1;
+  }
+}
+async function saveAiConf(){
+  if(!guardAdmin()) return;
+  const keyInput = document.getElementById("aiKeyInput").value.trim();
+  if(keyInput && !/^sk-ant-/.test(keyInput) && !await confirmBox("這串文字看起來不像 Anthropic API Key（通常以 sk-ant- 開頭），仍要儲存嗎？")) return;
+  const data = {
+    model: document.getElementById("aiModelSel").value || "claude-sonnet-4-6",
+    editorDaily: Math.max(0, Math.min(99, Number(document.getElementById("aiDailyInput").value)||0)),
+    updated: Date.now()
+  };
+  if(keyInput) data.apiKey = keyInput;
+  try{
+    await firebase.firestore().doc("teams/warriors/config/ai").set(data, {merge:true});
+    document.getElementById("aiKeyInput").value = "";
+    toast("AI 設定已儲存");
+    logEvent("edit", `更新 AI 設定：模型 ${data.model}、編輯者每日 ${data.editorDaily} 次${keyInput?"、更換 API Key":""}`);
+  }catch(e){ toast("儲存失敗："+(e.code||e.message||"")); }
+}
+async function clearAiKey(){
+  if(!guardAdmin()) return;
+  if(!await confirmBox("移除 API Key？所有 AI 功能將停用，直到重新填入。")) return;
+  try{
+    await firebase.firestore().doc("teams/warriors/config/ai")
+      .set({apiKey: firebase.firestore.FieldValue.delete()}, {merge:true});
+    toast("已移除 API Key"); logEvent("edit", "移除 AI API Key");
+  }catch(e){ toast("移除失敗："+(e.code||e.message||"")); }
+}
+
+/* ───────── 系統紀錄（管理者） ───────── */
+const LOG_TYPE_TXT = { login:"登入", ai:"AI 呼叫", edit:"資料編輯" };
+async function loadLogs(){
+  if(role !== "admin") return;
+  const el = document.getElementById("logList");
+  if(!el) return;
+  el.innerHTML = "載入中…";
+  try{
+    const s = await firebase.firestore().collection("teams/warriors/logs")
+      .orderBy("t","desc").limit(300).get();
+    const type = document.getElementById("logTypeSel").value;
+    let rows = s.docs.map(d=>d.data());
+    if(type) rows = rows.filter(r=>r.type===type);
+    if(!rows.length){ el.innerHTML = `<div class="empty">尚無紀錄。</div>`; return; }
+    el.innerHTML = `<div class="tblwrap"><table><thead><tr>
+        <th class="l">時間</th><th>類型</th><th class="l">成員</th><th class="l">內容</th></tr></thead><tbody>` +
+      rows.map(r=>`<tr>
+        <td class="l" style="white-space:nowrap">${new Date(r.t||0).toLocaleString("zh-TW",{hour12:false})}</td>
+        <td style="white-space:nowrap">${LOG_TYPE_TXT[r.type]||esc(r.type||"")}</td>
+        <td class="l">${esc(r.email||r.uid||"")}</td>
+        <td class="l">${esc(r.msg||"")}</td></tr>`).join("") +
+      `</tbody></table></div>
+      <div class="hint" style="margin-top:6px">顯示最近 300 筆（先取最新 300 筆再依類型過濾）。</div>`;
+  }catch(e){
+    console.error(e);
+    el.innerHTML = `<div class="empty">讀取失敗：${esc(e.code||e.message||"")}。請確認 Firestore 安全規則已更新為最新版。</div>`;
+  }
 }

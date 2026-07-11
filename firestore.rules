@@ -1,0 +1,59 @@
+rules_version = '2';
+// 親子勇士 WARRIORS — Firestore 安全規則（v1.7.0）
+// 部署方式：Firebase Console → Firestore Database → 規則 → 全部貼上取代 → 發布
+service cloud.firestore {
+  match /databases/{db}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function memPath() { return /databases/$(db)/documents/teams/warriors/members/$(request.auth.uid); }
+    function mem() { return get(memPath()).data; }
+    // 已核准成員（含唯讀）
+    function isMember() { return signedIn() && exists(memPath()) && mem().approved == true; }
+    function isAdmin() { return isMember() && mem().role == 'admin'; }
+    // 管理者或編輯者
+    function isEditor() { return isMember() && (mem().role == 'admin' || mem().role == 'editor'); }
+    // 擁有者（首次登入自動成為管理者的 bootstrap 帳號）
+    function isOwner() { return signedIn() && request.auth.token.email == 'd8641343@gmail.com'; }
+
+    // 球隊 meta（隊名、ERA 基準）
+    match /teams/warriors {
+      allow read: if isMember();
+      allow write: if isEditor();
+    }
+
+    // 主要資料集合：球員 / 比賽 / 榮譽 / 情蒐
+    match /teams/warriors/{coll}/{id} {
+      allow read: if isMember() && coll in ['players','games','honors','scouts'];
+      allow write: if isEditor() && coll in ['players','games','honors','scouts'];
+    }
+
+    // 成員名單與核准
+    match /teams/warriors/members/{uid} {
+      allow read: if isAdmin() || (signedIn() && request.auth.uid == uid);
+      // 新登入者可替自己建立「待核准的唯讀」檔；擁有者可 bootstrap 自己的管理者檔
+      allow create: if signedIn() && request.auth.uid == uid &&
+        (isOwner() || (request.resource.data.role == 'viewer' && request.resource.data.approved == false));
+      allow update: if isAdmin() || (isOwner() && request.auth.uid == uid);
+      allow delete: if isAdmin();
+    }
+
+    // AI 設定（API Key / 模型 / 編輯者每日次數）：管理者可寫，管理者+編輯者可讀
+    match /teams/warriors/config/{doc} {
+      allow read: if isEditor();
+      allow write: if isAdmin();
+    }
+
+    // AI 每日用量（文件 ID 格式：{uid}_{feature}_{yyyymmdd}），只能動自己的
+    match /teams/warriors/aiUsage/{id} {
+      allow read, write: if isAdmin() || (isEditor() && id.split('_')[0] == request.auth.uid);
+    }
+
+    // 系統紀錄：所有核准成員可新增（只能掛自己的 uid），僅管理者可讀；不可竄改
+    match /teams/warriors/logs/{id} {
+      allow read: if isAdmin();
+      allow create: if isMember() && request.resource.data.uid == request.auth.uid;
+      allow update: if false;
+      allow delete: if isAdmin();
+    }
+  }
+}
