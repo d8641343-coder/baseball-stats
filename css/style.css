@@ -61,6 +61,9 @@ h2::before{content:"";width:10px;height:10px;background:var(--gold);border:2px s
 .tblwrap{overflow-x:auto;background:#fff;border:1px solid var(--line);border-radius:10px;margin:10px 0}
 table{border-collapse:collapse;width:100%;font-size:13.5px;min-width:640px}
 th{background:var(--navy);color:#fff;padding:8px 10px;text-align:center;white-space:nowrap;position:sticky;top:0}
+th.sortable{cursor:pointer;user-select:none}
+th.sortable:hover{background:var(--navy-2)}
+th.sortable .arrow{margin-left:3px;opacity:.85}
 td{padding:7px 10px;border-bottom:1px solid #eee9dd;text-align:center;white-space:nowrap}
 td.l,th.l{text-align:left}
 tr:last-child td{border-bottom:none}
