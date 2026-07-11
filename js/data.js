@@ -1,5 +1,5 @@
 /* ───────── 版本(每次發布前更新此處) ───────── */
-const APP_VERSION = "v1.7.2 · 2026-07-11";
+const APP_VERSION = "v1.7.3 · 2026-07-11";
 
 /* ───────── 狀態 ───────── */
 let state = { teamName:"親子勇士", eraBases:{U12:6,U15:7,"其他":9}, players:[], games:[], honors:[], scouts:[] };
@@ -479,6 +479,58 @@ function runImport(){
   out.innerHTML = `✅ 匯入 ${ok} 筆${newP?`，自動新增球員 ${newP} 位`:""}${newG?`，自動建立比賽 ${newG} 場（比分為 0:0，請到比賽卡片補上）`:""}。`
     + (skip.length?`<br>⚠️ 略過 ${skip.length} 筆：<br>${skip.slice(0,8).map(esc).join("<br>")}${skip.length>8?"<br>…":""}`:"");
   if(ok) toast("匯入完成");
+}
+function csvCell(v){
+  v = String(v??"");
+  return /[",\r\n]/.test(v) ? '"'+v.replace(/"/g,'""')+'"' : v;
+}
+function csvRosterByLevel(level){
+  return state.players.filter(p=>(p.level||"U12")===level)
+    .slice().sort((a,b)=>{
+      const na = p_=>p_.num!==undefined && p_.num!=="" ? Number(p_.num) : Infinity;
+      const da = na(a) - na(b);
+      return da || String(a.name||"").localeCompare(String(b.name||""), "zh-Hant");
+    });
+}
+function exportImpTemplate(){
+  const type = document.getElementById("impType").value;
+  const level = document.getElementById("impLvl").value;
+  const today = new Date().toISOString().slice(0,10);
+  let header, rows;
+  if(type==="roster"){
+    header = ["姓名","背號","守位","階級","投","打","大頭照網址"];
+    rows = [["王小明","12","SS","U12","右","左",""]];
+  }else if(type==="batting"){
+    const roster = csvRosterByLevel(level);
+    if(!roster.length){ toast(`目前沒有 ${level} 階級的球員名單，請先建立名單`); return; }
+    header = ["日期","對手","姓名","打數","安打","二安","三安","全壘打","四死","犧飛","得分","打點","三振","盜壘","面對投手(右/左/混)"];
+    rows = roster.map(p=>[today,"",p.name,"","","","","","","","","","","",""]);
+  }else{
+    const roster = csvRosterByLevel(level);
+    if(!roster.length){ toast(`目前沒有 ${level} 階級的球員名單，請先建立名單`); return; }
+    header = ["日期","對手","姓名","局數(2.1=2又1/3)","被安打","失分","自責分","四死","三振","面對打線(右/左/混)","滾地出局","飛球出局"];
+    rows = roster.map(p=>[today,"",p.name,"","","","","","","","",""]);
+  }
+  const csv = "﻿" + [header, ...rows].map(r=>r.map(csvCell).join(",")).join("\r\n");
+  const blob = new Blob([csv], {type:"text/csv;charset=utf-8"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  const typeName = {roster:"名單", batting:"打擊", pitching:"投球"}[type];
+  a.download = `匯入範本-${typeName}-${level}-${today}.csv`;
+  a.click(); URL.revokeObjectURL(a.href);
+  toast("已下載範本CSV");
+}
+function loadImpCSV(input){
+  const file = input.files[0]; if(!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    let text = String(reader.result);
+    if(text.charCodeAt(0)===0xFEFF) text = text.slice(1);
+    document.getElementById("impText").value = text.trim();
+    toast("已載入CSV檔，請確認內容後按「開始匯入」");
+  };
+  reader.readAsText(file, "utf-8");
+  input.value = "";
 }
 
 /* ───────── 分享 ───────── */

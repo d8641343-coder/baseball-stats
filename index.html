@@ -280,6 +280,11 @@
       </div>
     </div>
     <div class="hint" id="impFormat" style="margin:10px 0;font-family:var(--mono);background:#f2efe6;padding:8px 10px;border-radius:6px"></div>
+    <div class="frow" style="margin-bottom:10px">
+      <button class="btn ghost" onclick="exportImpTemplate()">⬇️ 匯出範本CSV（自動帶入現有球員）</button>
+      <label class="btn ghost" style="display:inline-flex;align-items:center;cursor:pointer">📄 選擇CSV檔匯入<input type="file" accept=".csv,text/csv" style="display:none" onchange="loadImpCSV(this)"></label>
+    </div>
+    <div class="hint" style="margin-bottom:10px">先選好上方「資料類型」與「階級」再匯出範本，會依該階級現有球員自動填好姓名欄，記錄員只要在 Excel／記事本填數字存檔，再用「選擇CSV檔匯入」讀回、確認內容後按「開始匯入」即可。</div>
     <textarea id="impText" style="min-height:140px;font-family:var(--mono);font-size:13px" placeholder="在此貼上資料..."></textarea>
     <div class="frow" style="margin-top:10px">
       <button class="btn" onclick="runImport()">開始匯入</button>
