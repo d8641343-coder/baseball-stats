@@ -662,8 +662,8 @@ function buildScoutReportHTML(){
   const w = document.getElementById("rpWin").value;
   const note = document.getElementById("rpNote").value.trim();
   const sc = sid ? state.scouts.find(s=>s.id===sid) : null;
-  const games = w==="all" ? lvlGames() : lvlGames().slice(-Number(w));
-  const winTxt = w==="all" ? "全部賽事" : "近 " + w + " 場";
+  const games = windowGames(w);
+  const winTxt = w==="all" ? "全部賽事" : w==="1m" ? "近一個月" : "近 " + w + " 場";
   const lvlTxt = lvl==="all" ? "全隊" : lvl;
   const logo = document.querySelector(".sb-logo") ? document.querySelector(".sb-logo").src : "";
 
