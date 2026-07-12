@@ -1,5 +1,5 @@
 /* ───────── 版本(每次發布前更新此處) ───────── */
-const APP_VERSION = "v1.9.0 · 2026-07-12";
+const APP_VERSION = "v1.9.1 · 2026-07-12";
 
 /* ───────── 狀態 ───────── */
 let state = { teamName:"親子勇士", eraBases:{U12:6,U15:7,"其他":9}, players:[], games:[], honors:[], scouts:[] };
@@ -703,11 +703,10 @@ function highlightShareText(gid){
   const r = gameResult(g);
   return `⚾ ${state.teamName} ${g.date} vs ${g.opp}（${r==="W"?"勝":r==="L"?"敗":"和"} ${g.us}:${g.them}）\n\n${g.aiHighlight.text}`;
 }
-function copyHighlight(gid){ copyText(highlightShareText(gid), "賽後焦點已複製"); }
-function shareHighlightLine(gid){
-  const text = highlightShareText(gid); if(!text) return;
-  window.open("https://line.me/R/msg/text/?"+encodeURIComponent(text), "_blank", "noopener");
-}
+// LINE 沒有穩定的「分享純文字」網頁流程：手機上 line.me/R/msg/text 會被 App 攔截開對話框，
+// 但桌機瀏覽器會被導去 LINE it 分享外掛（那是設計給分享網址用的，不是長文字），會 400 錯誤。
+// 手機/桌機行為不一致又是 LINE 未公開文件的行為，改成單純複製文字，貼到 LINE 最穩。
+function copyHighlight(gid){ copyText(highlightShareText(gid), "賽後焦點已複製，貼到 LINE 分享即可"); }
 async function copyText(text, okMsg){
   try{ await navigator.clipboard.writeText(text); toast(okMsg); }
   catch(e){

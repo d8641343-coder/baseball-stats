@@ -528,9 +528,60 @@ function aiHighlightHTML(g){
   return `<div class="ai-out">${esc(h.text)}</div>
     <div class="hint" style="margin-top:4px">AI 撰寫日期：${new Date(h.created).toLocaleDateString("zh-TW")}</div>
     <div class="frow" style="margin-top:6px">
-      <button class="btn ghost sm" onclick="copyHighlight('${g.id}')">複製文字</button>
-      <button class="btn gold sm" onclick="shareHighlightLine('${g.id}')">📱 分享到 LINE</button>
+      <button class="btn gold sm" onclick="copyHighlight('${g.id}')">📋 複製文字（貼到 LINE 分享）</button>
+      <button class="btn ghost sm" id="hlPdfBtn-${g.id}" onclick="downloadHighlightPDF('${g.id}')">📄 下載 PDF</button>
     </div>`;
+}
+/* 賽後焦點 PDF：跟球探報告共用 #pdfStage 離屏容器與 rp- 系列排版樣式（見 buildScoutReportHTML）、
+   同一套 html2canvas+jsPDF 產生流程，只是內容換成焦點文章本身，不含編輯用的表單/按鈕。*/
+function buildHighlightPdfHTML(gid){
+  const g = state.games.find(x=>x.id===gid); if(!g || !g.aiHighlight) return "";
+  const r = gameResult(g);
+  const logo = document.querySelector(".sb-logo") ? document.querySelector(".sb-logo").src : "";
+  return `<div class="rp-page">
+    <div class="rp-head">
+      ${logo?`<img src="${logo}" alt="">`:""}
+      <div><h1>${esc(state.teamName)} 賽後焦點</h1>
+        <div class="sub">${esc(g.date)}${g.tour?`【${esc(g.tour)}】`:""} vs ${esc(g.opp)}</div></div>
+      <div class="rp-vs">比分<br><b>${g.us} : ${g.them}</b><br>${r==="W"?"勝":r==="L"?"敗":"和"}</div>
+    </div>
+    <div class="rp-note" style="font-size:13px;line-height:1.9">${esc(g.aiHighlight.text)}</div>
+    <div class="rp-foot"><span>${esc(state.teamName)} · 攻守數據中心</span><span>AI 生成內容，僅供隊內娛樂分享參考</span></div>
+  </div>`;
+}
+async function downloadHighlightPDF(gid){
+  const g = state.games.find(x=>x.id===gid); if(!g || !g.aiHighlight) return;
+  const btn = document.getElementById("hlPdfBtn-"+gid);
+  if(btn){ btn.disabled = true; btn.innerHTML = `<span class="spinner"></span>產生中…`; }
+  try{
+    const ok = await loadPdfLibs();
+    if(!ok) throw new Error("PDF 函式庫載入失敗，請檢查網路後重試");
+    const stage = document.getElementById("pdfStage");
+    stage.innerHTML = buildHighlightPdfHTML(gid);
+    await new Promise(r=>setTimeout(r, 120));   // 等待圖片渲染
+    const canvas = await html2canvas(stage, {scale:2, backgroundColor:"#ffffff", logging:false});
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({unit:"mm", format:"a4", orientation:"portrait"});
+    const pageW = 210, pageH = 297;
+    const pxPerPage = canvas.width * pageH / pageW;
+    let rendered = 0, page = 0;
+    while(rendered < canvas.height){
+      const sliceH = Math.min(pxPerPage, canvas.height - rendered);
+      const slice = document.createElement("canvas");
+      slice.width = canvas.width; slice.height = sliceH;
+      slice.getContext("2d").drawImage(canvas, 0, rendered, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
+      if(page > 0) pdf.addPage();
+      pdf.addImage(slice.toDataURL("image/jpeg", 0.92), "JPEG", 0, 0, pageW, sliceH * pageW / canvas.width);
+      rendered += sliceH; page++;
+    }
+    pdf.save(`${state.teamName}_賽後焦點_${g.date}.pdf`);
+    stage.innerHTML = "";
+    toast("PDF 已下載");
+  }catch(e){
+    console.error(e);
+    toast("PDF 產生失敗："+(e.message||"請稍後再試"));
+  }
+  if(btn){ btn.disabled = false; btn.textContent = "📄 下載 PDF"; }
 }
 async function aiPickMVP(){
   const scope = document.getElementById("aiScope").value;
