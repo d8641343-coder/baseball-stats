@@ -501,9 +501,10 @@ async function aiGameHighlight(gid){
     const resultTxt = r==="W"?"獲勝":r==="T"?"平手":"落敗";
     const styleGuide = g.level==="U12"
       ? "對象是 U12 小朋友球員和家長，語氣要「可愛」：多用活潑逗趣的形容、簡單好懂的比喻，像在稱讚小朋友一樣溫暖鼓勵，避免太複雜的戰術術語。"
-      : "對象是青少棒球員和家長，語氣要「輕鬆」：像運動主播熱血播報一樣，帶點幽默口語（例如「太誇張啦」這種語氣），有畫面感、有梗，但不失專業。";
+      : "對象是青少棒球員和家長，語氣要「輕鬆」：像運動主播熱血播報一樣，帶點幽默口語，有畫面感、有梗，但不失專業。";
     const cmts = (g.comments||[]).map(c=>`[${c.t}] ${c.text}`).join("\n");
     const prompt = `你是少棒/青少棒球隊的隨隊小編，要幫「${state.teamName}」寫一篇賽後焦點花絮，會直接貼到 LINE 群組給隊內選手與家長看，目的是娛樂、炒熱氣氛、增加大家對球隊的認同感，不是正式賽事報導。${styleGuide}
+提到失誤、失分、被打爆這類負面畫面時，語氣要體諒、鼓勵，聚焦在球員如何撐住、調整、團隊互相補位，絕對不可以用揶揄、嘲諷、消遣、看笑話的方式描寫（例如不要把守備失誤講成好笑的段子、不要挖苦球員），球員或家長讀了不該覺得被消遣。
 比賽：${g.date} vs ${g.opp}，${resultTxt} ${g.us}:${g.them}。
 以下是本場數據與現場記錄，只能根據這些內容寫作，不可捏造沒發生的情節或數字：
 ${gameBoxDigest(g)}
@@ -525,7 +526,8 @@ ${cmts?`\n現場講評記錄：\n${cmts}\n`:""}
 }
 function aiHighlightHTML(g){
   const h = g.aiHighlight; if(!h) return "";
-  return `<div class="ai-out">${esc(h.text)}</div>
+  return `<div class="hint" style="margin-bottom:4px">🤖 以下由 AI 小編自動生成，僅供隊內娛樂分享，非教練/管理者發言</div>
+    <div class="ai-out">${esc(h.text)}</div>
     <div class="hint" style="margin-top:4px">AI 撰寫日期：${new Date(h.created).toLocaleDateString("zh-TW")}</div>
     <div class="frow" style="margin-top:6px">
       <button class="btn gold sm" onclick="copyHighlight('${g.id}')">📋 複製文字（貼到 LINE 分享）</button>
@@ -545,6 +547,7 @@ function buildHighlightPdfHTML(gid){
         <div class="sub">${esc(g.date)}${g.tour?`【${esc(g.tour)}】`:""} vs ${esc(g.opp)}</div></div>
       <div class="rp-vs">比分<br><b>${g.us} : ${g.them}</b><br>${r==="W"?"勝":r==="L"?"敗":"和"}</div>
     </div>
+    <p style="font-size:11px;color:#999">🤖 以下由 AI 小編自動生成，僅供隊內娛樂分享，非教練/管理者發言</p>
     <div class="rp-note" style="font-size:13px;line-height:1.9">${esc(g.aiHighlight.text)}</div>
     <div class="rp-foot"><span>${esc(state.teamName)} · 攻守數據中心</span><span>AI 生成內容，僅供隊內娛樂分享參考</span></div>
   </div>`;
