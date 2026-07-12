@@ -306,7 +306,7 @@ function showErReason(gid, i){
   const g = state.games.find(x=>x.id===gid); if(!g) return;
   const l = (g.pitching||[])[i]; if(!l || !l.erAI) return;
   const desc = l.erAI.desc ? `描述：${l.erAI.desc}\n\n` : "";
-  confirmBox(`⚖️ AI 判定自責分依據\n\n${desc}${l.erAI.reason||"（無說明）"}`, {cancelText:"關閉", okText:"關閉"});
+  confirmBox(`⚖️ AI 判定自責分依據\n\n${desc}${l.erAI.reason||"（無說明）"}`, {okText:"關閉", danger:false, single:true});
 }
 
 /* ───────── 打擊 / 投球表 ───────── */
@@ -547,7 +547,7 @@ function confirmBox(msg, opts={}){
     bg.innerHTML = `<div class="dlg" role="alertdialog">
       <div class="dlg-msg">${esc(msg)}</div>
       <div class="dlg-actions">
-        <button class="btn ghost sm" data-act="cancel">${esc(opts.cancelText||"取消")}</button>
+        ${opts.single ? "" : `<button class="btn ghost sm" data-act="cancel">${esc(opts.cancelText||"取消")}</button>`}
         <button class="btn ${opts.danger===false?"gold":"warn"} sm" data-act="ok">${esc(opts.okText||"確定")}</button>
       </div></div>`;
     document.body.appendChild(bg);
