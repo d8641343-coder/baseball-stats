@@ -29,7 +29,8 @@ const AI_MODELS = [
 ];
 const AI_FEATURES = {
   scout:"AI 網路情蒐", urlscout:"成績網頁分析", gamemvp:"單場 MVP 評選",
-  mvp:"月/年度 MVP 評選", advice:"球員個人分析", er:"AI 判定自責分"
+  mvp:"月/年度 MVP 評選", advice:"球員個人分析", er:"AI 判定自責分",
+  highlight:"AI 賽後焦點總結"
 };
 // AI 呼叫的 tokens 是即時算出來附進 logEvent 訊息文字（"功能｜model｜tokens 輸入X/輸出Y"），
 // 沒有另外存結構化欄位；用量估算面板從這段文字反解析回來，見 auth.js 的 loadAiUsage()。
@@ -486,6 +487,50 @@ ${gameBoxDigest(g)}
     toast("AI 評選失敗："+(e.message||"未知錯誤"));
     if(btn){ btn.disabled=false; btn.textContent = `🤖 AI 選出單場 ${awShort}`; }
   }
+}
+/* ───────── AI 賽後焦點總結（給隊內 LINE 分享用，非正式戰報） ───────── */
+async function aiGameHighlight(gid){
+  if(!guardEdit()) return;
+  const g = state.games.find(x=>x.id===gid); if(!g) return;
+  if(!(g.batting||[]).length && !(g.pitching||[]).length) return toast("本場尚無球員數據，請先登錄打擊/投球");
+  if(!await aiGate("highlight")) return;
+  const btn = document.getElementById("hlBtn-"+gid);
+  if(btn){ btn.disabled = true; btn.innerHTML = `<span class="spinner"></span>撰寫中…`; }
+  try{
+    const r = gameResult(g);
+    const resultTxt = r==="W"?"獲勝":r==="T"?"平手":"落敗";
+    const styleGuide = g.level==="U12"
+      ? "對象是 U12 小朋友球員和家長，語氣要「可愛」：多用活潑逗趣的形容、簡單好懂的比喻，像在稱讚小朋友一樣溫暖鼓勵，避免太複雜的戰術術語。"
+      : "對象是青少棒球員和家長，語氣要「輕鬆」：像運動主播熱血播報一樣，帶點幽默口語（例如「太誇張啦」這種語氣），有畫面感、有梗，但不失專業。";
+    const cmts = (g.comments||[]).map(c=>`[${c.t}] ${c.text}`).join("\n");
+    const prompt = `你是少棒/青少棒球隊的隨隊小編，要幫「${state.teamName}」寫一篇賽後焦點花絮，會直接貼到 LINE 群組給隊內選手與家長看，目的是娛樂、炒熱氣氛、增加大家對球隊的認同感，不是正式賽事報導。${styleGuide}
+比賽：${g.date} vs ${g.opp}，${resultTxt} ${g.us}:${g.them}。
+以下是本場數據與現場記錄，只能根據這些內容寫作，不可捏造沒發生的情節或數字：
+${gameBoxDigest(g)}
+${cmts?`\n現場講評記錄：\n${cmts}\n`:""}
+請寫繁體中文，結構如下（可依實際亮點調整標題與人數，沒有亮點的部分就略過，不要硬湊）：
+1.「本日最佳特寫」：挑一位表現最突出、能串聯打/投/守亮點的球員做重點特寫，下一個吸睛小標題。
+2.「🔥 賽後焦點」：介紹其餘 2~4 位有亮點的球員，各自用一個有趣的暱稱/小標題帶出重點數據。
+3.「🎙️ 總結」：簡短總結整場比賽氣氛與團隊精神，正向收尾。
+全文約 400~600 字，語氣活潑、可用表情符號，但提到的數字（打數/安打/打點等）必須跟上面提供的數據一致，不可加總或換算錯誤。直接輸出文章內容本身，不要加 markdown 符號（#、**），用換行分段即可。`;
+    const text = await callClaude(prompt, false, "highlight");
+    g.aiHighlight = { text: text.trim(), created: Date.now(), level: g.level };
+    save(); renderAll(); openCard(gid);
+    toast("賽後焦點總結已產生");
+  }catch(e){
+    console.error(e);
+    toast("撰寫失敗："+(e.message||"未知錯誤"));
+    if(btn){ btn.disabled=false; btn.textContent = "🎙️ AI 賽後焦點總結"; }
+  }
+}
+function aiHighlightHTML(g){
+  const h = g.aiHighlight; if(!h) return "";
+  return `<div class="ai-out">${esc(h.text)}</div>
+    <div class="hint" style="margin-top:4px">AI 撰寫日期：${new Date(h.created).toLocaleDateString("zh-TW")}</div>
+    <div class="frow" style="margin-top:6px">
+      <button class="btn ghost sm" onclick="copyHighlight('${g.id}')">複製文字</button>
+      <button class="btn gold sm" onclick="shareHighlightLine('${g.id}')">📱 分享到 LINE</button>
+    </div>`;
 }
 async function aiPickMVP(){
   const scope = document.getElementById("aiScope").value;

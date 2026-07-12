@@ -1,5 +1,5 @@
 /* ───────── 版本(每次發布前更新此處) ───────── */
-const APP_VERSION = "v1.8.2 · 2026-07-12";
+const APP_VERSION = "v1.9.0 · 2026-07-12";
 
 /* ───────── 狀態 ───────── */
 let state = { teamName:"親子勇士", eraBases:{U12:6,U15:7,"其他":9}, players:[], games:[], honors:[], scouts:[] };
@@ -698,6 +698,16 @@ function gameReportText(gid){
 }
 function copySeasonReport(){ copyText(seasonReportText(), "球隊戰報已複製，可直接貼上分享"); }
 function copyGameReport(gid){ copyText(gameReportText(gid), "單場戰報已複製"); }
+function highlightShareText(gid){
+  const g = state.games.find(x=>x.id===gid); if(!g || !g.aiHighlight) return "";
+  const r = gameResult(g);
+  return `⚾ ${state.teamName} ${g.date} vs ${g.opp}（${r==="W"?"勝":r==="L"?"敗":"和"} ${g.us}:${g.them}）\n\n${g.aiHighlight.text}`;
+}
+function copyHighlight(gid){ copyText(highlightShareText(gid), "賽後焦點已複製"); }
+function shareHighlightLine(gid){
+  const text = highlightShareText(gid); if(!text) return;
+  window.open("https://line.me/R/msg/text/?"+encodeURIComponent(text), "_blank", "noopener");
+}
 async function copyText(text, okMsg){
   try{ await navigator.clipboard.writeText(text); toast(okMsg); }
   catch(e){

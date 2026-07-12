@@ -256,6 +256,11 @@ function renderGames(){
           <button class="btn ghost sm edit-only" id="aiAwBtn-${g.id}" onclick="aiPickGameMvp('${g.id}')">🤖 AI 選出單場 ${awShort}</button>
         </div>
 
+        <div class="ai-highlight" style="margin-top:6px">
+          ${g.aiHighlight ? aiHighlightHTML(g) : `<span class="hint">尚無 AI 賽後焦點總結，適合直接貼到 LINE 群組給隊內選手/家長看。</span>`}
+          <button class="btn ghost sm edit-only" id="hlBtn-${g.id}" style="margin-top:6px" onclick="aiGameHighlight('${g.id}')">🎙️ ${g.aiHighlight?"重新產生賽後焦點總結":"AI 賽後焦點總結"}</button>
+        </div>
+
         <div class="subhead">打擊登錄（四死球含觸身球）</div>
         ${batRows?`<div class="tblwrap"><table><thead><tr><th class="l">球員</th><th>打數</th><th>安打</th><th>二安</th><th>三安</th><th>全壘打</th><th>四死</th><th>犧飛</th><th>得分</th><th>打點</th><th>三振</th><th>盜壘</th><th>面對投手</th><th></th></tr></thead><tbody>${batRows}</tbody></table></div>`:`<div class="hint">尚未登錄打擊數據。</div>`}
         <div class="frow edit-only" style="margin-top:6px">
