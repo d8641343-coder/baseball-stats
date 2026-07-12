@@ -186,7 +186,7 @@ function renderGames(){
       }
       return `<tr>
       <td class="l">${nameLink(l.pid)}</td><td class="num">${ipStr(l.outs)}</td><td class="num">${l.H}</td>
-      <td class="num">${l.R}</td><td class="num">${l.ER}${l.erAI?`<span title="🤖 AI 判定依據：${esc(l.erAI.reason)}" style="cursor:help">🤖</span>`:""}</td><td class="num">${l.BB}</td><td class="num">${l.SO}</td>
+      <td class="num">${l.R}</td><td class="num">${l.ER}${l.erAI?`<button style="cursor:pointer;background:none;border:none;padding:0 2px;font-size:14px" title="點看 AI 判定依據" onclick="showErReason('${g.id}',${i})">🤖</button>`:""}</td><td class="num">${l.BB}</td><td class="num">${l.SO}</td>
       <td class="num">${(l.GO||0)}/${(l.AO||0)}</td>
       <td>${VSB_TXT[l.vsB||""]}</td>
       <td class="num">${l.outs?f2(l.ER*eraBaseOf(g.level)*3/l.outs):"-"}</td>
@@ -302,6 +302,12 @@ function renderGames(){
   }).join("");
 }
 function openCard(gid){ openGames.add(gid); const el=document.getElementById("gc-"+gid); if(el) el.classList.add("open"); }
+function showErReason(gid, i){
+  const g = state.games.find(x=>x.id===gid); if(!g) return;
+  const l = (g.pitching||[])[i]; if(!l || !l.erAI) return;
+  const desc = l.erAI.desc ? `描述：${l.erAI.desc}\n\n` : "";
+  confirmBox(`⚖️ AI 判定自責分依據\n\n${desc}${l.erAI.reason||"（無說明）"}`, {cancelText:"關閉", okText:"關閉"});
+}
 
 /* ───────── 打擊 / 投球表 ───────── */
 const BAT_GETTERS = {

@@ -282,13 +282,15 @@ async function loadAiUsage(){
   if(!el) return;
   el.innerHTML = "載入中…";
   try{
+    // 不加 .where("type","==","ai") 避免需要另外在 Firestore Console 手動建立複合索引，
+    // 跟 loadLogs() 一樣：抓最新一批紀錄後在前端過濾出 type==="ai" 的部分即可。
     const s = await firebase.firestore().collection("teams/warriors/logs")
-      .where("type","==","ai").orderBy("t","desc").limit(5000).get();
-    _aiUsageRows = s.docs.map(d=>d.data());
+      .orderBy("t","desc").limit(5000).get();
+    _aiUsageRows = s.docs.map(d=>d.data()).filter(r=>r.type==="ai");
     renderAiUsage();
   }catch(e){
     console.error(e);
-    el.innerHTML = `<div class="empty">讀取失敗：${esc(e.code||e.message||"")}。若提示需要建立索引，依 Firestore 提示的連結建立即可。</div>`;
+    el.innerHTML = `<div class="empty">讀取失敗：${esc(e.code||e.message||"")}。請確認 Firestore 安全規則已更新為最新版。</div>`;
   }
 }
 function renderAiUsage(){
