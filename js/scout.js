@@ -539,6 +539,11 @@ function aiHighlightHTML(g){
 function buildHighlightPdfHTML(gid){
   const g = state.games.find(x=>x.id===gid); if(!g || !g.aiHighlight) return "";
   const r = gameResult(g);
+  const isWin = r !== "L";
+  const awShort = isWin ? "MVP" : "SVP";
+  const awIcon = isWin ? "⭐" : "🥈";
+  const offPid = isWin ? g.mvp : g.svp;
+  const aiAw = isWin ? g.aiMvp : g.aiSvp;
   const logo = document.querySelector(".sb-logo") ? document.querySelector(".sb-logo").src : "";
   let h = `<div class="rp-page">
     <div class="rp-head">
@@ -546,8 +551,16 @@ function buildHighlightPdfHTML(gid){
       <div><h1>${esc(state.teamName)} 賽後焦點</h1>
         <div class="sub">${esc(g.date)}${g.tour?`【${esc(g.tour)}】`:""} vs ${esc(g.opp)}</div></div>
       <div class="rp-vs">比分<br><b>${g.us} : ${g.them}</b><br>${r==="W"?"勝":r==="L"?"敗":"和"}</div>
-    </div>
-    <p style="font-size:11px;color:#999">🤖 以下由 AI 小編自動生成，僅供隊內娛樂分享，非教練/管理者發言</p>
+    </div>`;
+
+  if(offPid || aiAw){
+    h += `<div class="rp-sec">${awIcon} 單場 ${awShort}</div><p style="font-size:12.5px;line-height:1.8">`;
+    if(offPid) h += `<b>官方/教練選出：</b>${esc(playerName(offPid))}<br>`;
+    if(aiAw) h += `<b>🤖 AI 選出：</b>${esc(aiAw.name||playerName(aiAw.pid))}${aiAw.reason?`　${esc(aiAw.reason)}`:""}`;
+    h += `</p>`;
+  }
+
+  h += `<p style="font-size:11px;color:#999">🤖 以下由 AI 小編自動生成，僅供隊內娛樂分享，非教練/管理者發言</p>
     <div class="rp-note" style="font-size:13px;line-height:1.9">${esc(g.aiHighlight.text)}</div>`;
 
   if((g.batting||[]).length){
