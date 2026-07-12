@@ -186,14 +186,22 @@ function renderGames(){
       }
       return `<tr>
       <td class="l">${nameLink(l.pid)}</td><td class="num">${ipStr(l.outs)}</td><td class="num">${l.H}</td>
-      <td class="num">${l.R}</td><td class="num">${l.ER}</td><td class="num">${l.BB}</td><td class="num">${l.SO}</td>
+      <td class="num">${l.R}</td><td class="num">${l.ER}${l.erAI?`<span title="🤖 AI 判定依據：${esc(l.erAI.reason)}" style="cursor:help">🤖</span>`:""}</td><td class="num">${l.BB}</td><td class="num">${l.SO}</td>
       <td class="num">${(l.GO||0)}/${(l.AO||0)}</td>
       <td>${VSB_TXT[l.vsB||""]}</td>
       <td class="num">${l.outs?f2(l.ER*eraBaseOf(g.level)*3/l.outs):"-"}</td>
       <td style="white-space:nowrap"><button class="del edit-only" title="編輯" onclick="startEditLine('${g.id}','pitching',${i})">✎</button><button class="del" onclick="delLine('${g.id}','pitching',${i})">✕</button></td></tr>`;
     }).join("");
-    const comments = (g.comments||[]).map((c,i)=>`<div class="comment"><span class="t">${esc(c.t)}</span>${esc(c.text)}
-      <button class="del" style="float:right" onclick="delComment('${g.id}',${i})">✕</button></div>`).join("");
+    const comments = (g.comments||[]).map((c,i)=>{
+      if(editable && editLine && editLine.gid===g.id && editLine.type==="comment" && editLine.i===i){
+        return `<div class="comment"><span class="t">${esc(c.t)}</span>
+          <textarea id="ecm-${g.id}-${i}" style="width:100%;min-height:48px;margin:4px 0">${esc(c.text)}</textarea>
+          <button class="btn sm" onclick="saveEditComment('${g.id}',${i})">✓存</button> <button class="del" onclick="cancelEditLine()">✕</button></div>`;
+      }
+      return `<div class="comment"><span class="t">${esc(c.t)}</span>${esc(c.text)}
+      <span style="float:right"><button class="del edit-only" title="編輯" onclick="startEditLine('${g.id}','comment',${i})">✎</button>
+      <button class="del" onclick="delComment('${g.id}',${i})">✕</button></span></div>`;
+    }).join("");
     const cmtText = (g.comments||[]).map(c=>`${c.t} ${c.text}`).join("\n");
     const media = (g.media||[]).map((m,i)=>{
       const isImg = /^data:image\//.test(m.url) || /\.(jpe?g|png|gif|webp|avif|bmp|heic|heif)(\?|$)/i.test(m.url);

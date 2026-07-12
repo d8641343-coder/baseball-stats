@@ -31,6 +31,13 @@ const AI_FEATURES = {
   scout:"AI 網路情蒐", urlscout:"成績網頁分析", gamemvp:"單場 MVP 評選",
   mvp:"月/年度 MVP 評選", advice:"球員個人分析", er:"AI 判定自責分"
 };
+// AI 呼叫的 tokens 是即時算出來附進 logEvent 訊息文字（"功能｜model｜tokens 輸入X/輸出Y"），
+// 沒有另外存結構化欄位；用量估算面板從這段文字反解析回來，見 auth.js 的 loadAiUsage()。
+function parseAiLogMsg(msg){
+  const m = String(msg||"").match(/^(.*)｜([\w.-]+)｜tokens 輸入(\d+)\/輸出(\d+)$/);
+  if(!m) return null;
+  return { feature: m[1], model: m[2], inTok: Number(m[3]), outTok: Number(m[4]) };
+}
 let aiConf = null, _aiConfUnsub = null;
 function aiEnabled(){ return !!(aiConf && aiConf.apiKey); }
 function subscribeAiConf(){
@@ -595,6 +602,7 @@ ${desc}
     const r = parseAIJson(text);
     const er = Math.max(0, Math.min(R, Number(r.er)||0));
     document.getElementById("pER-"+gid).value = er;
+    pendingErAI[gid] = {pid, reason: r.reason||"", desc};
     out.innerHTML = `<div class="ai-out" style="margin:8px 0 0">⚖️ 判定自責分：<b>${er}</b>（失分 ${R}）
 ${esc(r.reason||"")}
 已自動填入上方「自責分」欄位，確認無誤後再按「＋ 登錄」；AI 判定僅供參考，可自行修改。</div>`;

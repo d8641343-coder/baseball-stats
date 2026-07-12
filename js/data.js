@@ -1,5 +1,5 @@
 /* ───────── 版本(每次發布前更新此處) ───────── */
-const APP_VERSION = "v1.7.5 · 2026-07-12";
+const APP_VERSION = "v1.8.0 · 2026-07-12";
 
 /* ───────── 狀態 ───────── */
 let state = { teamName:"親子勇士", eraBases:{U12:6,U15:7,"其他":9}, players:[], games:[], honors:[], scouts:[] };
@@ -7,6 +7,7 @@ let win = { overview:"all", batting:"all", pitching:"all" };
 let lvl = "all";
 let ovSquad = "all";   // 球隊近況的分隊篩選："all"|"藍"|"白"|"紅"
 const openGames = new Set();   // 記住展開中的比賽卡片，讓即時同步重繪後仍保持展開
+const pendingErAI = {};   // gid -> {pid, reason, desc}，AI 判定自責分後暫存，登錄投球時併入該筆紀錄
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,6);
 
 /* ───────── 權限系統 ───────── */
@@ -305,6 +306,9 @@ function addPitLine(gid){
   const line = {pid, outs, vsB: document.getElementById("pvsB-"+gid).value};
   ["H","R","ER","BB","SO","GO","AO"].forEach(k => line[k] = Math.max(0, Number(document.getElementById("p"+k+"-"+gid).value)||0));
   if(line.ER > line.R) return toast("自責分不可大於失分");
+  const pend = pendingErAI[gid];
+  if(pend && pend.pid === pid) line.erAI = {reason: pend.reason, desc: pend.desc};
+  delete pendingErAI[gid];
   g.pitching.push(line); save(); renderAll(); openCard(gid); toast("已登錄投球");
 }
 async function delLine(gid,type,i){
@@ -313,8 +317,8 @@ async function delLine(gid,type,i){
   if(!await confirmBox(`刪除這筆${type==="batting"?"打擊":"投球"}紀錄？`)) return;
   g[type].splice(i,1); if(editLine && editLine.gid===gid) editLine=null; save(); renderAll(); openCard(gid);
 }
-/* ── 已登錄的打擊 / 投球紀錄可就地修改 ── */
-let editLine = null;   // {gid, type:'batting'|'pitching', i}
+/* ── 已登錄的打擊 / 投球紀錄 / 講評可就地修改 ── */
+let editLine = null;   // {gid, type:'batting'|'pitching'|'comment', i}
 function startEditLine(gid, type, i){
   const g = state.games.find(x=>x.id===gid); if(!g) return;
   if(!guardEdit(g.level)) return;
@@ -340,6 +344,7 @@ function saveEditPitLine(gid, i){
   const line = {pid:cur.pid, outs, vsB:document.getElementById(`epvsB-${gid}-${i}`).value};
   ["H","R","ER","BB","SO","GO","AO"].forEach(k => line[k] = Math.max(0, Number(document.getElementById(`ep${k}-${gid}-${i}`).value)||0));
   if(line.ER > line.R) return toast("自責分不可大於失分");
+  if(cur.erAI && line.ER === cur.ER) line.erAI = cur.erAI;   // ER 數字未變，AI 判定依據仍然有效
   g.pitching[i] = line; editLine = null; save(); renderAll(); openCard(gid); toast("已更新投球紀錄");
 }
 function addComment(gid){
@@ -353,7 +358,16 @@ function addComment(gid){
 async function delComment(gid,i){
   const g=state.games.find(x=>x.id===gid); if(!g) return; if(!guardEdit(g.level)) return;
   if(!await confirmBox("刪除這則講評？")) return;
-  g.comments.splice(i,1); save(); renderAll(); openCard(gid); }
+  g.comments.splice(i,1); if(editLine && editLine.gid===gid && editLine.type==="comment") editLine=null;
+  save(); renderAll(); openCard(gid); }
+function saveEditComment(gid, i){
+  const g = state.games.find(x=>x.id===gid); if(!g) return;
+  if(!guardEdit(g.level)) return;
+  const cur = (g.comments||[])[i]; if(!cur) return;
+  const text = document.getElementById(`ecm-${gid}-${i}`).value.trim();
+  if(!text) return toast("內容不可空白");
+  g.comments[i] = {t: cur.t, text}; editLine = null; save(); renderAll(); openCard(gid); toast("已更新講評");
+}
 function addMedia(gid){
   const g = state.games.find(x=>x.id===gid); if(!g) return;
   if(!guardEdit(g.level)) return;

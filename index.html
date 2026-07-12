@@ -341,6 +341,26 @@
       <button class="btn warn sm" onclick="clearAiKey()">移除 Key（停用 AI）</button>
     </div>
     <div class="hint" style="margin-top:8px">取得 Key：到 <b>console.anthropic.com</b> 註冊 → Billing 儲值（最低 5 美元）→ API Keys 建立一把貼到上方。建議同時在 Console 設定每月用量上限。「編輯者每日次數」填 0 = 不開放編輯者使用。</div>
+
+    <div class="subhead" style="margin-top:14px">各模型價格（估算花費用）</div>
+    <p class="hint">Anthropic 沒有提供查詢帳戶餘額的 API，所以無法直接顯示 Console 那樣的即時餘額。這裡改成：依你填的價格，估算下方「AI 用量花費」實際打了多少 token、花了多少錢。價格請到 <b>console.anthropic.com → Model pricing</b> 核對後填入（USD / 每百萬 tokens），留空的模型不會估算金額。</p>
+    <div id="aiPriceRows"></div>
+    <button class="btn gold sm" style="margin-top:6px" onclick="saveAiConf()">儲存 AI 設定（含價格）</button>
+  </div>
+
+  <h2>AI 用量花費（估算）</h2>
+  <div class="panel">
+    <div class="frow">
+      <div class="fld"><label>區間</label>
+        <select id="aiUsagePeriodSel" onchange="renderAiUsage()">
+          <option value="month">本月至今</option>
+          <option value="7d">近 7 天</option>
+          <option value="30d">近 30 天</option>
+          <option value="all">全部（已讀取範圍）</option>
+        </select></div>
+      <button class="btn" onclick="loadAiUsage()">載入 / 重新整理</button>
+    </div>
+    <div id="aiUsageBox" style="margin-top:10px;font-size:13px"><div class="hint">按「載入」統計 AI 呼叫用量。</div></div>
   </div>
 
   <h2>系統紀錄</h2>

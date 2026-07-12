@@ -234,15 +234,33 @@ function renderAiConf(){
   if(daily && document.activeElement !== daily){
     daily.value = (aiConf && aiConf.editorDaily !== undefined) ? aiConf.editorDaily : 1;
   }
+  const priceBox = document.getElementById("aiPriceRows");
+  if(priceBox && document.activeElement.tagName !== "INPUT"){
+    const pricing = (aiConf && aiConf.pricing) || {};
+    priceBox.innerHTML = AI_MODELS.map(m=>{
+      const p = pricing[m.id] || {};
+      return `<div class="frow" style="gap:6px;align-items:flex-end">
+        <div class="fld" style="min-width:170px"><label>${esc(m.label)}</label></div>
+        <div class="fld w60"><label>輸入 $/M</label><input type="number" min="0" step="0.01" value="${p.in ?? ""}" id="price-in-${m.id}"></div>
+        <div class="fld w60"><label>輸出 $/M</label><input type="number" min="0" step="0.01" value="${p.out ?? ""}" id="price-out-${m.id}"></div>
+      </div>`;
+    }).join("");
+  }
 }
 async function saveAiConf(){
   if(!guardAdmin()) return;
   const keyInput = document.getElementById("aiKeyInput").value.trim();
   if(keyInput && !/^sk-ant-/.test(keyInput) && !await confirmBox("這串文字看起來不像 Anthropic API Key（通常以 sk-ant- 開頭），仍要儲存嗎？")) return;
+  const pricing = {};
+  AI_MODELS.forEach(m=>{
+    const inV = Number(document.getElementById(`price-in-${m.id}`).value)||0;
+    const outV = Number(document.getElementById(`price-out-${m.id}`).value)||0;
+    if(inV || outV) pricing[m.id] = { in: inV, out: outV };
+  });
   const data = {
     model: document.getElementById("aiModelSel").value || "claude-sonnet-4-6",
     editorDaily: Math.max(0, Math.min(99, Number(document.getElementById("aiDailyInput").value)||0)),
-    updated: Date.now()
+    pricing, updated: Date.now()
   };
   if(keyInput) data.apiKey = keyInput;
   try{
@@ -251,6 +269,71 @@ async function saveAiConf(){
     toast("AI 設定已儲存");
     logEvent("edit", `更新 AI 設定：模型 ${data.model}、編輯者每日 ${data.editorDaily} 次${keyInput?"、更換 API Key":""}`);
   }catch(e){ toast("儲存失敗："+(e.code||e.message||"")); }
+}
+
+/* ───────── AI 用量花費估算（管理者） ─────────
+   Anthropic 沒有提供查詢帳戶餘額的 API，只能從既有的 AI 呼叫紀錄（logs，type=ai）
+   反解析出每次呼叫的 model + token 數，乘上管理者填的價格（上方 aiPriceRows）估算花費。
+   僅供參考，正確金額以 Anthropic Console 帳單為準。*/
+let _aiUsageRows = null;
+async function loadAiUsage(){
+  if(role !== "admin") return;
+  const el = document.getElementById("aiUsageBox");
+  if(!el) return;
+  el.innerHTML = "載入中…";
+  try{
+    const s = await firebase.firestore().collection("teams/warriors/logs")
+      .where("type","==","ai").orderBy("t","desc").limit(5000).get();
+    _aiUsageRows = s.docs.map(d=>d.data());
+    renderAiUsage();
+  }catch(e){
+    console.error(e);
+    el.innerHTML = `<div class="empty">讀取失敗：${esc(e.code||e.message||"")}。若提示需要建立索引，依 Firestore 提示的連結建立即可。</div>`;
+  }
+}
+function renderAiUsage(){
+  const el = document.getElementById("aiUsageBox");
+  if(!el || !_aiUsageRows) return;
+  const sel = document.getElementById("aiUsagePeriodSel");
+  const period = sel ? sel.value : "month";
+  const now = new Date();
+  let since = 0;
+  if(period === "month") since = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+  else if(period === "7d") since = now.getTime() - 7*86400000;
+  else if(period === "30d") since = now.getTime() - 30*86400000;
+  const pricing = (aiConf && aiConf.pricing) || {};
+  const byModel = {};
+  let parsedCalls = 0;
+  _aiUsageRows.filter(r=>r.t >= since).forEach(r=>{
+    const p = parseAiLogMsg(r.msg);
+    if(!p) return;   // 判定失敗等紀錄沒有 token 數，略過
+    parsedCalls++;
+    const b = byModel[p.model] || (byModel[p.model] = {calls:0, inTok:0, outTok:0});
+    b.calls++; b.inTok += p.inTok; b.outTok += p.outTok;
+  });
+  const models = Object.keys(byModel);
+  if(!models.length){
+    el.innerHTML = `<div class="empty">此區間沒有 AI 呼叫紀錄（已讀取最近 5000 筆系統紀錄中屬於 AI 呼叫的部分）。</div>`;
+    return;
+  }
+  let totalCost = 0, hasUnpriced = false;
+  const rows = models.map(model=>{
+    const b = byModel[model];
+    const price = pricing[model];
+    let cost = null;
+    if(price){ cost = b.inTok/1e6*(price.in||0) + b.outTok/1e6*(price.out||0); totalCost += cost; }
+    else hasUnpriced = true;
+    const label = (AI_MODELS.find(m=>m.id===model)||{}).label || model;
+    return `<tr><td class="l">${esc(label)}</td><td class="num">${b.calls}</td><td class="num">${b.inTok.toLocaleString()}</td>
+      <td class="num">${b.outTok.toLocaleString()}</td><td class="num">${cost===null?"（未設價格）":"$"+cost.toFixed(3)}</td></tr>`;
+  }).join("");
+  el.innerHTML = `<div class="tblwrap"><table><thead><tr>
+      <th class="l">模型</th><th>呼叫次數</th><th>輸入 tokens</th><th>輸出 tokens</th><th>估算花費</th></tr></thead>
+      <tbody>${rows}</tbody>
+      <tfoot><tr><td class="l"><b>合計</b></td><td class="num">${parsedCalls}</td><td colspan="2"></td>
+        <td class="num"><b>$${totalCost.toFixed(3)}</b>${hasUnpriced?"＋未設價格模型":""}</td></tr></tfoot>
+    </table></div>
+    <div class="hint" style="margin-top:6px">依「AI 功能設定」填的價格估算，僅供參考，正確金額請以 Anthropic Console 帳單為準；價格留空的模型無法估算。統計範圍為最近 5000 筆系統紀錄中的 AI 呼叫。</div>`;
 }
 async function clearAiKey(){
   if(!guardAdmin()) return;
