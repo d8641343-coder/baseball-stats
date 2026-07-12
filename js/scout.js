@@ -540,7 +540,7 @@ function buildHighlightPdfHTML(gid){
   const g = state.games.find(x=>x.id===gid); if(!g || !g.aiHighlight) return "";
   const r = gameResult(g);
   const logo = document.querySelector(".sb-logo") ? document.querySelector(".sb-logo").src : "";
-  return `<div class="rp-page">
+  let h = `<div class="rp-page">
     <div class="rp-head">
       ${logo?`<img src="${logo}" alt="">`:""}
       <div><h1>${esc(state.teamName)} 賽後焦點</h1>
@@ -548,9 +548,33 @@ function buildHighlightPdfHTML(gid){
       <div class="rp-vs">比分<br><b>${g.us} : ${g.them}</b><br>${r==="W"?"勝":r==="L"?"敗":"和"}</div>
     </div>
     <p style="font-size:11px;color:#999">🤖 以下由 AI 小編自動生成，僅供隊內娛樂分享，非教練/管理者發言</p>
-    <div class="rp-note" style="font-size:13px;line-height:1.9">${esc(g.aiHighlight.text)}</div>
-    <div class="rp-foot"><span>${esc(state.teamName)} · 攻守數據中心</span><span>AI 生成內容，僅供隊內娛樂分享參考</span></div>
-  </div>`;
+    <div class="rp-note" style="font-size:13px;line-height:1.9">${esc(g.aiHighlight.text)}</div>`;
+
+  if((g.batting||[]).length){
+    h += `<div class="rp-sec">打擊登錄</div>
+    <table><thead><tr><th class="l">球員</th><th>打數</th><th>安打</th><th>二安</th><th>三安</th><th>全壘打</th><th>四死</th><th>犧飛</th><th>得分</th><th>打點</th><th>三振</th><th>盜壘</th></tr></thead><tbody>`;
+    g.batting.forEach(l=>{
+      h += `<tr><td class="l">${esc(playerName(l.pid))}</td><td>${l.AB}</td><td>${l.H}</td><td>${l.d2}</td><td>${l.d3}</td><td>${l.HR}</td>
+        <td>${l.BB}</td><td>${l.SF}</td><td>${l.R}</td><td>${l.RBI}</td><td>${l.SO}</td><td>${l.SB}</td></tr>`;
+    });
+    h += `</tbody></table>`;
+  }
+  if((g.pitching||[]).length){
+    h += `<div class="rp-sec">投球登錄</div>
+    <table><thead><tr><th class="l">球員</th><th>局數</th><th>被安打</th><th>失分</th><th>自責分</th><th>四死</th><th>三振</th><th>滾地/飛球</th></tr></thead><tbody>`;
+    g.pitching.forEach(l=>{
+      h += `<tr><td class="l">${esc(playerName(l.pid))}</td><td>${ipStr(l.outs)}</td><td>${l.H}</td><td>${l.R}</td><td>${l.ER}</td><td>${l.BB}</td><td>${l.SO}</td><td>${(l.GO||0)}/${(l.AO||0)}</td></tr>`;
+    });
+    h += `</tbody></table>`;
+  }
+  if((g.media||[]).length){
+    h += `<div class="rp-sec">照片 / 影片連結</div><p style="font-size:11.5px;line-height:1.9">`;
+    g.media.forEach(m=>{ h += `${m.cap?esc(m.cap)+"：":""}${esc(m.url)}<br>`; });
+    h += `</p>`;
+  }
+
+  h += `<div class="rp-foot"><span>${esc(state.teamName)} · 攻守數據中心</span><span>AI 生成內容，僅供隊內娛樂分享參考</span></div></div>`;
+  return h;
 }
 async function downloadHighlightPDF(gid){
   const g = state.games.find(x=>x.id===gid); if(!g || !g.aiHighlight) return;
