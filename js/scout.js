@@ -830,6 +830,7 @@ function buildScoutReportHTML(){
   const games = windowGames(w);
   const winTxt = w==="all" ? "全部賽事" : w==="1m" ? "近一個月" : "近 " + w + " 場";
   const lvlTxt = lvl==="all" ? "全隊" : lvl;
+  const tourTxt = tourFilter==="all" ? "" : tourFilter;   // 頂部選取的賽事名稱，全部時不顯示
   const logo = document.querySelector(".sb-logo") ? document.querySelector(".sb-logo").src : "";
 
   const wn = games.filter(g=>gameResult(g)==="W").length;
@@ -844,7 +845,7 @@ function buildScoutReportHTML(){
     <div class="rp-head">
       ${logo?`<img src="${logo}" alt="">`:""}
       <div><h1>親子勇士 賽前球探報告</h1>
-        <div class="sub">SCOUTING REPORT · ${lvlTxt} · 產生日期 ${new Date().toLocaleDateString("zh-TW")}</div></div>
+        <div class="sub">SCOUTING REPORT · ${lvlTxt}${tourTxt?" · "+esc(tourTxt):""} · 產生日期 ${new Date().toLocaleDateString("zh-TW")}</div></div>
       ${sc?`<div class="rp-vs">對戰對手<br><b>${esc(sc.opp)}</b></div>`:""}
     </div>`;
 
@@ -880,11 +881,11 @@ function buildScoutReportHTML(){
       .map(p=>({p,m:bAgg[p.id]})).sort((a,b)=>(b.m.OPS||0)-(a.m.OPS||0));
     if(bRows.length){
       h += `<div class="rp-sec">${sc?"三":"二"}、我方打者近況</div>
-      <table><thead><tr><th class="l">球員</th><th>投打</th><th>場次</th><th>打數</th><th>安打</th><th>全壘打</th><th>打點</th><th>三振</th><th>盜壘</th><th>打擊率</th><th>上壘率</th><th>長打率</th><th>OPS</th></tr></thead><tbody>`;
+      <table><thead><tr><th class="l">球員</th><th>投打</th><th>場次</th><th>打數</th><th>安打</th><th>全壘打</th><th>四死</th><th>打點</th><th>三振</th><th>盜壘</th><th>打擊率</th><th>上壘率</th><th>長打率</th><th>OPS</th></tr></thead><tbody>`;
       bRows.forEach(({p,m})=>{
         const hand = (p.throws?p.throws+"投":"") + (p.bats?(p.bats==="兩"?"左右":p.bats)+"打":"") || "—";
         h += `<tr><td class="l"><b>${esc(p.name)}</b>${p.num?` #${esc(p.num)}`:""}</td><td>${hand}</td>
-          <td>${m.gp}</td><td>${m.AB}</td><td>${m.H}</td><td>${m.HR}</td><td>${m.RBI}</td><td>${m.SO}</td><td>${m.SB}</td>
+          <td>${m.gp}</td><td>${m.AB}</td><td>${m.H}</td><td>${m.HR}</td><td>${m.BB}</td><td>${m.RBI}</td><td>${m.SO}</td><td>${m.SB}</td>
           <td>${f3(m.AVG)}</td><td>${f3(m.OBP)}</td><td>${f3(m.SLG)}</td><td><b>${f3(m.OPS)}</b></td></tr>`;
       });
       h += `</tbody></table>`;
@@ -900,7 +901,7 @@ function buildScoutReportHTML(){
           <td><b>${m.ERA===Infinity?"INF":f2(m.ERA)}</b></td><td>${f2(m.WHIP)}</td><td>${f2(m.K9)}</td><td>${m.GOAO===Infinity?"全滾":isFinite(m.GOAO)?f2(m.GOAO):"-"}</td></tr>`;
       });
       h += `</tbody></table>
-      <p style="color:#999;font-size:10.5px">防禦率依比賽階級局制換算（U12 ${(state.eraBases||{}).U12||6} 局 / U15 ${(state.eraBases||{}).U15||7} 局）。</p>`;
+      <p style="color:#999;font-size:10.5px">防禦率依比賽階級局制換算（U12 ${(state.eraBases||{}).U12||6} 局 / U15 ${(state.eraBases||{}).U15||7} 局 / U18 ${(state.eraBases||{}).U18||7} 局 / OB ${(state.eraBases||{}).OB||9} 局）。</p>`;
     }
   }
 

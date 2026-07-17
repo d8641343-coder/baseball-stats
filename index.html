@@ -54,8 +54,12 @@
     <button class="chip active" data-lvl="all">全隊</button>
     <button class="chip" data-lvl="U12">U12</button>
     <button class="chip" data-lvl="U15">U15</button>
+    <button class="chip" data-lvl="U18">U18</button>
+    <button class="chip" data-lvl="OB">OB</button>
   </div>
-  <span class="hint">切換後，各頁統計只計入該階級的比賽與球員。</span>
+  <b>賽事：</b>
+  <select id="tourSel" onchange="setTourFilter(this.value)"><option value="all">全部賽事</option></select>
+  <span class="hint">切換後，各頁統計只計入所選階級與賽事的比賽與球員。</span>
 </div></div>
 
 <main>
@@ -95,7 +99,7 @@
     <div class="frow">
       <div class="fld"><label>日期</label><input type="date" id="gDate"></div>
       <div class="fld"><label>時間</label><input type="time" id="gTime"></div>
-      <div class="fld"><label>階級</label><select id="gLvl"><option>U12</option><option>U15</option><option>其他</option></select></div>
+      <div class="fld"><label>階級</label><select id="gLvl"><option>U12</option><option>U15</option><option>U18</option><option>OB</option><option>其他</option></select></div>
       <div class="fld"><label>分隊</label><select id="gSquad"><option value="">未分隊</option><option value="藍">藍隊</option><option value="白">白隊</option><option value="紅">紅隊</option></select></div>
       <div class="fld"><label>賽事名稱</label><input id="gTour" placeholder="例：協會盃" style="width:120px"></div>
       <div class="fld"><label>對手</label><input id="gOpp" placeholder="對戰球隊" style="width:120px"></div>
@@ -140,6 +144,10 @@
       <select id="ebU12" onchange="setEraBaseLvl('U12',this.value)"><option value="6">6 局</option><option value="7">7 局</option><option value="9">9 局</option></select></div>
     <div class="fld"><label>U15 局制</label>
       <select id="ebU15" onchange="setEraBaseLvl('U15',this.value)"><option value="7">7 局</option><option value="6">6 局</option><option value="9">9 局</option></select></div>
+    <div class="fld"><label>U18 局制</label>
+      <select id="ebU18" onchange="setEraBaseLvl('U18',this.value)"><option value="7">7 局</option><option value="6">6 局</option><option value="9">9 局</option></select></div>
+    <div class="fld"><label>OB 局制</label>
+      <select id="ebOB" onchange="setEraBaseLvl('OB',this.value)"><option value="9">9 局</option><option value="7">7 局</option><option value="6">6 局</option></select></div>
     <div class="fld"><label>其他 局制</label>
       <select id="ebOther" onchange="setEraBaseLvl('其他',this.value)"><option value="9">9 局</option><option value="7">7 局</option><option value="6">6 局</option></select></div>
   </div>
@@ -153,7 +161,7 @@
     <div class="fld"><label>姓名</label><input id="pName" placeholder="球員姓名" style="width:120px"></div>
     <div class="fld w60"><label>背號</label><input id="pNum" placeholder="00"></div>
     <div class="fld"><label>守位</label><input id="pPos" placeholder="例：P / SS" style="width:100px"></div>
-    <div class="fld"><label>階級</label><select id="pLvl"><option>U12</option><option>U15</option><option>其他</option></select></div>
+    <div class="fld"><label>階級</label><select id="pLvl"><option>U12</option><option>U15</option><option>U18</option><option>OB</option><option>其他</option></select></div>
     <div class="fld"><label>投</label><select id="pThrows"><option value="">不明</option><option value="右">右投</option><option value="左">左投</option></select></div>
     <div class="fld"><label>打</label><select id="pBats"><option value="">不明</option><option value="右">右打</option><option value="左">左打</option><option value="兩">左右開弓</option></select></div>
     <div class="fld" style="flex:1;min-width:180px"><label>大頭照網址（選填）</label><input id="pPhoto" placeholder="https://...jpg"></div>
@@ -276,7 +284,7 @@
         </select>
       </div>
       <div class="fld"><label>自動建立比賽的階級</label>
-        <select id="impLvl"><option>U12</option><option>U15</option><option>其他</option></select>
+        <select id="impLvl"><option>U12</option><option>U15</option><option>U18</option><option>OB</option><option>其他</option></select>
       </div>
     </div>
     <div class="hint" id="impFormat" style="margin:10px 0;font-family:var(--mono);background:#f2efe6;padding:8px 10px;border-radius:6px"></div>

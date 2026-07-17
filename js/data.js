@@ -1,10 +1,15 @@
 /* ───────── 版本(每次發布前更新此處) ───────── */
-const APP_VERSION = "v1.9.4 · 2026-07-12";
+const APP_VERSION = "v1.11.1 · 2026-07-17";
+
+/* ───────── 階級與 ERA 局制基準(單一來源，新增/調整階級改這裡) ───────── */
+const LEVELS = ["U12","U15","U18","OB","其他"];
+const ERA_BASE_DEFAULT = {U12:6,U15:7,U18:7,OB:9,"其他":9};
 
 /* ───────── 狀態 ───────── */
-let state = { teamName:"親子勇士", eraBases:{U12:6,U15:7,"其他":9}, players:[], games:[], honors:[], scouts:[] };
+let state = { teamName:"親子勇士", eraBases:{...ERA_BASE_DEFAULT}, players:[], games:[], honors:[], scouts:[] };
 let win = { overview:"all", batting:"all", pitching:"all" };
 let lvl = "all";
+let tourFilter = "all";   // 賽事名稱篩選（全域，與階級一起套用）："all" 或某個賽事名稱
 let ovSquad = "all";   // 球隊近況的分隊篩選："all"|"藍"|"白"|"紅"
 const openGames = new Set();   // 記住展開中的比賽卡片，讓即時同步重繪後仍保持展開
 const pendingErAI = {};   // gid -> {pid, reason, desc}，AI 判定自責分後暫存，登錄投球時併入該筆紀錄
@@ -29,7 +34,15 @@ function normDate(s){
   return `${m[1]}-${m[2].padStart(2,"0")}-${m[3].padStart(2,"0")}`;
 }
 function sortedGames(){ return [...state.games].sort((a,b)=> a.date.localeCompare(b.date) || (a.time||"").localeCompare(b.time||"") || (a.created||0)-(b.created||0)); }
-function lvlGames(){ return sortedGames().filter(g => lvl==="all" || (g.level||"U12")===lvl); }
+function lvlGames(){ return sortedGames().filter(g =>
+  (lvl==="all" || (g.level||"U12")===lvl) &&
+  (tourFilter==="all" || (g.tour||"").trim()===tourFilter)); }
+// 所有比賽中出現過的賽事名稱（去重、排序），供頂部賽事篩選下拉使用
+function tourNames(){
+  const set = new Set();
+  state.games.forEach(g => { const t=(g.tour||"").trim(); if(t) set.add(t); });
+  return [...set].sort((a,b)=>a.localeCompare(b));
+}
 // 依區間切片：all=全部；1m=近一個月（依日期）；數字=近 N 場
 function sliceWindow(g, w){
   if(w==="all") return g;
@@ -157,7 +170,7 @@ function subscribeAll(){
   teamRef.onSnapshot(d=>{
     const m = d.exists ? d.data() : {};
     state.teamName = m.teamName || "親子勇士";
-    state.eraBases = m.eraBases || {U12:6,U15:7,"其他":9};
+    state.eraBases = {...ERA_BASE_DEFAULT, ...(m.eraBases||{})};   // 補齊舊資料缺少的階級(如新增的 U18/OB)基準
     _lastSync.meta = stableStr({teamName:state.teamName, eraBases:state.eraBases});
     scheduleRender();
   }, e=>console.error("meta 讀取失敗", e));
@@ -185,7 +198,7 @@ async function save(){
       if(set) chg.push(`${name} 更新${set}`);
       if(del) chg.push(`${name} 刪除${del}`);
     });
-    const meta = { teamName: state.teamName||"親子勇士", eraBases: state.eraBases||{U12:6,U15:7,"其他":9} };
+    const meta = { teamName: state.teamName||"親子勇士", eraBases: state.eraBases||{...ERA_BASE_DEFAULT} };
     const metaStr = stableStr(meta);
     if(metaStr !== _lastSync.meta){ batch.set(teamRef, meta, {merge:true}); _lastSync.meta = metaStr; ops++; chg.push("球隊設定"); }
     if(ops){
@@ -263,7 +276,7 @@ function setGameField(gid, field, val){
   if(!guardEdit(g.level)) return;
   if(field==="us" || field==="them") g[field] = Math.max(0, Number(val)||0);
   else if(field==="time"){ const t = String(val).trim(); if(t && !/^\d{1,2}:\d{2}$/.test(t)) return toast("時間格式不正確"); g.time = t; }
-  else if(field==="level"){ if(!["U12","U15","其他"].includes(val)) return; if(!guardEdit(val)) return; g.level = val; }
+  else if(field==="level"){ if(!LEVELS.includes(val)) return; if(!guardEdit(val)) return; g.level = val; }
   else if(field==="squad") g.squad = ["藍","白","紅"].includes(val) ? val : "";
   else if(field==="opp"){ const o = String(val).trim(); if(!o) return toast("對手不可空白"); g.opp = o; }
   else if(field==="tour") g.tour = String(val).trim();
@@ -393,12 +406,12 @@ async function editPlayer(pid){
   const name = await promptBox("姓名：", p.name); if(name===null) return;
   const num = await promptBox("背號：", p.num||""); if(num===null) return;
   const pos = await promptBox("守位：", p.pos||""); if(pos===null) return;
-  const level = await promptBox("階級（U12 / U15 / 其他）：", p.level||"U12"); if(level===null) return;
+  const level = await promptBox("階級（U12 / U15 / U18 / OB / 其他）：", p.level||"U12"); if(level===null) return;
   const throws = await promptBox("投（右 / 左，留空為不明）：", p.throws||""); if(throws===null) return;
   const bats = await promptBox("打（右 / 左 / 兩，留空為不明）：", p.bats||""); if(bats===null) return;
   if(name.trim()) p.name = name.trim();
   p.num = num.trim(); p.pos = pos.trim();
-  p.level = ["U12","U15","其他"].includes(level.trim()) ? level.trim() : p.level;
+  p.level = LEVELS.includes(level.trim()) ? level.trim() : p.level;
   p.throws = ["右","左"].includes(throws.trim()) ? throws.trim() : "";
   p.bats = ["右","左","兩"].includes(bats.trim()) ? bats.trim() : "";
   save(); renderAll(); openProfile(pid);
@@ -407,11 +420,11 @@ async function editPlayer(pid){
 /* ───────── AI 功能 ───────── */
 function setEraBaseLvl(level, v){
   if(!guardEdit(level)) return;
-  state.eraBases = state.eraBases || {U12:6,U15:7,"其他":9};
+  state.eraBases = state.eraBases || {...ERA_BASE_DEFAULT};
   state.eraBases[level] = Number(v); save(); renderAll();
 }
 const IMP_FORMATS = {
-  roster: "欄位順序：姓名, 背號, 守位, 階級(U12/U15/其他), 投(右/左), 打(右/左/兩), 大頭照網址\n範例：王小明, 12, SS, U12, 右, 左, https://.../photo.jpg（投打與照片可留空）",
+  roster: "欄位順序：姓名, 背號, 守位, 階級(U12/U15/U18/OB/其他), 投(右/左), 打(右/左/兩), 大頭照網址\n範例：王小明, 12, SS, U12, 右, 左, https://.../photo.jpg（投打與照片可留空）",
   batting: "欄位順序：日期, 對手, 姓名, 打數, 安打, 二安, 三安, 全壘打, 四死, 犧飛, 得分, 打點, 三振, 盜壘, 面對投手(右/左/混)\n範例：2026-07-05, 向上, 王小明, 4, 2, 1, 0, 0, 1, 0, 1, 2, 0, 1, 右（日期後欄位可留空，視為 0 或不明）",
   pitching: "欄位順序：日期, 對手, 姓名, 局數(2.1=2又1/3), 被安打, 失分, 自責分, 四死, 三振, 面對打線(右/左/混), 滾地出局, 飛球出局\n範例：2026-07-05, 向上, 王小明, 3.2, 4, 2, 1, 3, 5, 右, 6, 3（後面欄位可留空）"
 };
@@ -459,7 +472,7 @@ function runImport(){
         if(!name) throw "缺姓名";
         if(state.players.find(p=>p.name===name)) throw "已存在，略過";
         state.players.push({id:uid(), name, num:num||"", pos:pos||"",
-          level:["U12","U15","其他"].includes(plvl)?plvl:level,
+          level:LEVELS.includes(plvl)?plvl:level,
           throws:["右","左"].includes(thr)?thr:"", bats:["右","左","兩"].includes(bt)?bt:"",
           photo:photo||""});
         ok++;
@@ -566,6 +579,7 @@ function importJSON(input){
       if(!Array.isArray(data.players) || !Array.isArray(data.games)) throw new Error("格式不符");
       if(!await confirmBox("匯入將覆蓋目前的資料，確定繼續？")) return;
       data.honors = data.honors||[]; data.scouts = data.scouts||[];
+      data.eraBases = {...ERA_BASE_DEFAULT, ...(data.eraBases||{})};   // 補齊舊備份缺少的階級基準
       state = data; save(); renderAll(); toast("匯入完成");
     }catch(e){ toast("匯入失敗：檔案格式不正確"); }
     input.value = "";
@@ -577,7 +591,7 @@ async function resetAll(){
   if(!await confirmBox("將清除全部球員、比賽、榮譽與數據，且無法復原。確定？")) return;
   if(!await confirmBox("再次確認：真的要清除全部資料嗎？")) return;
   state.players = []; state.games = []; state.honors = []; state.scouts = [];
-  state.teamName = "親子勇士"; state.eraBases = {U12:6,U15:7,"其他":9};
+  state.teamName = "親子勇士"; state.eraBases = {...ERA_BASE_DEFAULT};
   await save();   // save() 會刪除所有現存文件（孤兒清除）；成員/權限不受影響
   renderAll(); toast("已清除");
 }
@@ -634,14 +648,14 @@ async function delScout(sid){
 }
 async function saveHonor(json){
   const h = JSON.parse(json);
-  if(!guardEdit(["U12","U15","其他"].includes(h.level)?h.level:null)) return;
+  if(!guardEdit(LEVELS.includes(h.level)?h.level:null)) return;
   const dup = state.honors.find(x=>x.type===h.type && x.period===h.period && x.level===h.level);
   if(dup && !await confirmBox("此期間已有評選紀錄，要再新增一筆嗎？")) return;
   state.honors.push(h); save(); renderAll(); toast("已存入榮譽榜");
 }
 async function delHonor(id){
   const h0 = state.honors.find(h=>h.id===id); if(!h0) return;
-  if(!guardEdit(["U12","U15","其他"].includes(h0.level)?h0.level:null)) return;
+  if(!guardEdit(LEVELS.includes(h0.level)?h0.level:null)) return;
   if(!await confirmBox("刪除此筆榮譽紀錄？")) return;
   state.honors = state.honors.filter(h=>h.id!==id);
   save(); renderAll();

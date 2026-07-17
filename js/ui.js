@@ -40,7 +40,7 @@ function nameLink(pid){
   const p = getP(pid);
   return p ? `<span class="pname" onclick="openProfile('${pid}')">${esc(p.name)}</span>` : "（已移除）";
 }
-function lvlBadge(v){ return `<span class="lvl-badge lvl-${v==="U12"||v==="U15"?v:"其他"}">${esc(v||"U12")}</span>`; }
+function lvlBadge(v){ const c = LEVELS.includes(v) ? v : "其他"; return `<span class="lvl-badge lvl-${c}">${esc(v||"U12")}</span>`; }
 function squadBadge(v){ if(!["藍","白","紅"].includes(v)) return ""; return `<span class="squad-badge sq-${v}">${v}隊</span>`; }
 function handBadge(p){
   if(!p || (!p.throws && !p.bats)) return "";
@@ -234,7 +234,7 @@ function renderGames(){
           <div class="frow edit-only">
             <div class="fld"><label>📅 比賽日期</label><input type="date" value="${g.date}" onchange="setGameDate('${g.id}',this.value)"></div>
             <div class="fld"><label>🕒 比賽時間</label><input type="time" value="${g.time||""}" onchange="setGameField('${g.id}','time',this.value)"></div>
-            <div class="fld"><label>階級</label><select onchange="setGameField('${g.id}','level',this.value)">${["U12","U15","其他"].map(x=>`<option ${g.level===x?"selected":""}>${x}</option>`).join("")}</select></div>
+            <div class="fld"><label>階級</label><select onchange="setGameField('${g.id}','level',this.value)">${LEVELS.map(x=>`<option ${g.level===x?"selected":""}>${x}</option>`).join("")}</select></div>
             <div class="fld"><label>🎽 分隊</label><select onchange="setGameField('${g.id}','squad',this.value)"><option value=""${!g.squad?" selected":""}>未分隊</option>${["藍","白","紅"].map(s=>`<option value="${s}"${g.squad===s?" selected":""}>${s}隊</option>`).join("")}</select></div>
             <div class="fld"><label>賽事名稱</label><input value="${esc(g.tour||"")}" placeholder="例：協會盃" style="width:110px" onchange="setGameField('${g.id}','tour',this.value)"></div>
             <div class="fld"><label>對手</label><input value="${esc(g.opp)}" style="width:110px" onchange="setGameField('${g.id}','opp',this.value)"></div>
@@ -366,9 +366,9 @@ const PIT_GETTERS = {
   K9:r=>r.m.K9, BB9:r=>r.m.BB9, GOAO:r=>r.m.GOAO
 };
 function renderPitching(){
-  const eb = state.eraBases || {U12:6,U15:7,"其他":9};
-  const e1=document.getElementById("ebU12"), e2=document.getElementById("ebU15"), e3=document.getElementById("ebOther");
-  if(e1){ e1.value=String(eb.U12||6); e2.value=String(eb.U15||7); e3.value=String(eb["其他"]||9); }
+  const eb = state.eraBases || {...ERA_BASE_DEFAULT};
+  const e1=document.getElementById("ebU12"), e2=document.getElementById("ebU15"), e4=document.getElementById("ebU18"), e5=document.getElementById("ebOB"), e3=document.getElementById("ebOther");
+  if(e1){ e1.value=String(eb.U12||6); e2.value=String(eb.U15||7); if(e4) e4.value=String(eb.U18||7); if(e5) e5.value=String(eb.OB||9); e3.value=String(eb["其他"]||9); }
   const games = windowGames(win.pitching);
   const agg = pitchingAgg(games);
   const base = state.players.filter(p=>agg[p.id]).map(p=>({p, m:agg[p.id]}));
@@ -384,7 +384,7 @@ function renderPitching(){
   document.getElementById("pitTable").innerHTML = `<div class="tblwrap"><table>
     <thead><tr>${th_("pit","name","球員","l")}${th_("pit","gp","場次")}${th_("pit","outs","局數")}${th_("pit","H","被安打")}${th_("pit","R","失分")}${th_("pit","ER","自責分")}${th_("pit","BB","四死")}${th_("pit","SO","三振")}${th_("pit","ERA","防禦率")}${th_("pit","WHIP","WHIP")}${th_("pit","K9","K/9")}${th_("pit","BB9","BB/9")}${th_("pit","GOAO","滾飛比")}</tr></thead>
     <tbody>${html}<tr class="total"><td class="l">球隊合計</td><td class="num">${games.length}</td><td class="num">${ipStr(tot.outs)}</td><td class="num">${tot.H}</td><td class="num">${tot.R}</td><td class="num">${tot.ER}</td><td class="num">${tot.BB}</td><td class="num">${tot.SO}</td><td class="num">${f2(tot.ERA)}</td><td class="num">${f2(tot.WHIP)}</td><td class="num">${f2(tot.K9)}</td><td class="num">${f2(tot.BB9)}</td><td class="num">${tot.GOAO===Infinity?"全滾地":f2(tot.GOAO)}</td></tr></tbody></table></div>
-    <div class="hint">防禦率依各場比賽的階級局制換算（U12 ${ (state.eraBases||{}).U12||6 } 局、U15 ${ (state.eraBases||{}).U15||7 } 局、其他 ${ (state.eraBases||{})["其他"]||9 } 局）；K/9、BB/9 固定以每 9 局換算；滾飛比＝滾地出局 ÷ 飛球出局，越高代表越會製造滾地球。</div>`;
+    <div class="hint">防禦率依各場比賽的階級局制換算（U12 ${ (state.eraBases||{}).U12||6 } 局、U15 ${ (state.eraBases||{}).U15||7 } 局、U18 ${ (state.eraBases||{}).U18||7 } 局、OB ${ (state.eraBases||{}).OB||9 } 局、其他 ${ (state.eraBases||{})["其他"]||9 } 局）；K/9、BB/9 固定以每 9 局換算；滾飛比＝滾地出局 ÷ 飛球出局，越高代表越會製造滾地球。</div>`;
 }
 
 /* ───────── 個人歷程 ───────── */
@@ -537,8 +537,17 @@ function drawChart(id, cfg){
   charts[id] = new Chart(ctx, cfg);
 }
 function renderAll(){
-  renderHeader(); renderOverview(); renderRoster(); renderGames(); renderBatting(); renderPitching(); renderHonors(); renderScouts();
+  renderTourFilter(); renderHeader(); renderOverview(); renderRoster(); renderGames(); renderBatting(); renderPitching(); renderHonors(); renderScouts();
 }
+// 依現有比賽的賽事名稱重建頂部篩選下拉（保留目前選取；選取的賽事已不存在則回到全部）
+function renderTourFilter(){
+  const sel = document.getElementById("tourSel"); if(!sel) return;
+  const names = tourNames();
+  if(tourFilter!=="all" && !names.includes(tourFilter)) tourFilter = "all";
+  sel.innerHTML = `<option value="all"${tourFilter==="all"?" selected":""}>全部賽事</option>` +
+    names.map(n=>`<option value="${esc(n)}"${tourFilter===n?" selected":""}>${esc(n)}</option>`).join("");
+}
+function setTourFilter(v){ tourFilter = v; renderAll(); }
 function toast(msg){
   const t = document.getElementById("toast");
   t.textContent = msg; t.classList.add("show");

@@ -27,8 +27,8 @@ function pitchingAgg(games){
   return map;
 }
 function eraBaseOf(level){
-  const b = state.eraBases || {U12:6,U15:7,"其他":9};
-  return b[level==="U12"||level==="U15" ? level : "其他"] || 9;
+  const b = state.eraBases || {...ERA_BASE_DEFAULT};
+  return b[level] || b["其他"] || 9;
 }
 function finishPit(m){
   const ip = m.outs/3;

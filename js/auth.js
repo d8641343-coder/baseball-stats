@@ -4,12 +4,12 @@
    App 其餘程式呼叫方式不變。*/
 const OWNER_EMAIL = "d8641343@gmail.com";   // 初始管理者（第一次登入即為 admin）
 let role = null;            // 'admin' | 'editor' | 'viewer'
-let myLevels = "ALL";       // 編輯者可編輯的階級："ALL" | "U12" | "U15" | "其他"（admin 一律 ALL）
+let myLevels = "ALL";       // 編輯者可編輯的階級："ALL" 或 LEVELS 之一（admin 一律 ALL）
 let currentUser = null;    // firebase.User
 let membersList = [];      // 管理者用：成員清單
 let _membersUnsub = null;
 const ROLE_TXT = {admin:"管理者", editor:"編輯者", viewer:"唯讀成員"};
-const LEVELS = ["U12","U15","其他"];
+// 階級清單 LEVELS 與 ERA_BASE_DEFAULT 定義於 data.js(較先載入)，此處直接沿用。
 // canEdit(level)：不帶 level → 是否具備任何編輯身分（供 save() 等通用判斷）；
 // 帶 level → 是否可編輯「該階級」的資料（編輯者受 myLevels 限制，admin 一律可）。
 function canEdit(level){

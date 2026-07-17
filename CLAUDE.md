@@ -36,7 +36,7 @@ firestore.rules       Firestore 安全規則備份(實際生效版本在 Firebas
 ```js
 {
   teamName: string,
-  eraBases: { U12: number, U15: number, "其他": number },  // ERA 換算局數基準
+  eraBases: { U12, U15, U18, OB, "其他": number },  // ERA 換算局數基準（鍵同 LEVELS）
   players: Player[],
   games: Game[],
   honors: Honor[],
@@ -46,8 +46,9 @@ firestore.rules       Firestore 安全規則備份(實際生效版本在 Firebas
 
 **Player**
 ```js
-{ id, name, num, pos, level: "U12"|"U15"|"其他",
+{ id, name, num, pos, level: "U12"|"U15"|"U18"|"OB"|"其他",
   throws: ""|"右"|"左", bats: ""|"右"|"左"|"兩", photo }
+// 階級清單為單一來源常數 LEVELS（js/data.js 最上方），ERA 局制預設值為 ERA_BASE_DEFAULT；新增/調整階級只改這兩處。
 ```
 
 **Game**
@@ -126,7 +127,7 @@ firestore.rules       Firestore 安全規則備份(實際生效版本在 Firebas
   - `sumXxx(map)` — 把全隊所有球員加總成球隊合計列
   - `xxxSplitAgg(games, pid)` — 單一球員的左右投/打拆分統計
 - **渲染函式**:`renderX()` 對應同名 section/區塊,無回傳值,直接操作 DOM(`innerHTML`),例如 `renderOverview`/`renderRoster`/`renderGames`/`renderBatting`/`renderPitching`/`renderHonors`/`renderScouts`/`renderHeader`。`renderAll()` 統一呼叫全部 render 函式(整頁重繪,見下方技術債)。
-- **權限守衛**:`canEdit(level)`/`guardEdit(level)` 帶階級參數(可省略);編輯者(editor)可被管理者限定只能編輯特定階級(Firestore member 文件的 `editLevels` 欄位:`"ALL"|"U12"|"U15"|"其他"`,admin 一律 ALL,存於 `auth.js` 的 `myLevels`)。寫入型函式須先取得該筆資料的階級(`g.level` / `p.level`)再呼叫 `guardEdit(該階級)`;無 level 參數時僅判斷是否具編輯身分(供 `save()` 等通用場景)。`guardAdmin()` 僅管理者。
+- **權限守衛**:`canEdit(level)`/`guardEdit(level)` 帶階級參數(可省略);編輯者(editor)可被管理者限定只能編輯特定階級(Firestore member 文件的 `editLevels` 欄位:`"ALL"` 或 `LEVELS` 之一(U12/U15/U18/OB/其他),admin 一律 ALL,存於 `auth.js` 的 `myLevels`)。寫入型函式須先取得該筆資料的階級(`g.level` / `p.level`)再呼叫 `guardEdit(該階級)`;無 level 參數時僅判斷是否具編輯身分(供 `save()` 等通用場景)。`guardAdmin()` 僅管理者。
 - **格式化 helper**:`f3()`/`f2()` 格式化小數,`ipStr()`/`parseIP()` 局數字串互轉,`esc()` HTML escape,`normDate()` 日期正規化。
 - **HTML 片段產生**:回傳字串而非直接操作 DOM 的函式,如 `avatarHTML()`/`nameLink()`/`lvlBadge()`/`handBadge()`/`scoutCardHTML()`。
 
