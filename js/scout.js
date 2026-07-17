@@ -844,7 +844,7 @@ function buildScoutReportHTML(){
   let h = `<div class="rp-page">
     <div class="rp-head">
       ${logo?`<img src="${logo}" alt="">`:""}
-      <div><h1>親子勇士 賽前球探報告</h1>
+      <div><h1>親子勇士 球探報告</h1>
         <div class="sub">SCOUTING REPORT · ${lvlTxt}${tourTxt?" · "+esc(tourTxt):""} · 產生日期 ${new Date().toLocaleDateString("zh-TW")}</div></div>
       ${sc?`<div class="rp-vs">對戰對手<br><b>${esc(sc.opp)}</b></div>`:""}
     </div>`;
