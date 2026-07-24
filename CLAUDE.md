@@ -103,7 +103,7 @@ firestore.rules       Firestore 安全規則備份(實際生效版本在 Firebas
 
 發布步驟:
 
-1. 更新 `js/data.js` 最上方的 `APP_VERSION`(格式 `vX.Y.Z · YYYY-MM-DD`)
+1. 更新 `js/data.js` 最上方的 `APP_VERSION`(格式 `vX.Y.Z · YYYY-MM-DD`),**並同步把 `index.html` 裡所有本機 js/css 的 `?v=X.Y.Z` 查詢字串改成同一版號**(快取破壞;不改的話瀏覽器會只更新部分檔案,例如版號的 data.js 更新了但 scout.js 還用舊快取)
 2. `git commit` 改動的檔案 → `git push origin master`
 3. Pages 自動重新部署(約 1～2 分鐘)。開啟網址核對登入畫面版號是否為新版;版號沒變先 Ctrl+F5 強制重新整理再判斷
 
