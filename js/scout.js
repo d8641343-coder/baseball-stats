@@ -565,7 +565,7 @@ function buildHighlightPdfHTML(gid){
 
   if((g.batting||[]).length){
     h += `<div class="rp-sec">打擊登錄</div>
-    <table><thead><tr><th class="l">球員</th><th>打數</th><th>安打</th><th>二安</th><th>三安</th><th>全壘打</th><th>四死</th><th>犧飛</th><th>得分</th><th>打點</th><th>三振</th><th>盜壘</th></tr></thead><tbody>`;
+    <table><tbody><tr><th class="l">球員</th><th>打數</th><th>安打</th><th>二安</th><th>三安</th><th>全壘打</th><th>四死</th><th>犧飛</th><th>得分</th><th>打點</th><th>三振</th><th>盜壘</th></tr>`;
     g.batting.forEach(l=>{
       h += `<tr><td class="l">${esc(playerName(l.pid))}</td><td>${l.AB}</td><td>${l.H}</td><td>${l.d2}</td><td>${l.d3}</td><td>${l.HR}</td>
         <td>${l.BB}</td><td>${l.SF}</td><td>${l.R}</td><td>${l.RBI}</td><td>${l.SO}</td><td>${l.SB}</td></tr>`;
@@ -574,7 +574,7 @@ function buildHighlightPdfHTML(gid){
   }
   if((g.pitching||[]).length){
     h += `<div class="rp-sec">投球登錄</div>
-    <table><thead><tr><th class="l">球員</th><th>局數</th><th>被安打</th><th>失分</th><th>自責分</th><th>四死</th><th>三振</th><th>滾地/飛球</th></tr></thead><tbody>`;
+    <table><tbody><tr><th class="l">球員</th><th>局數</th><th>被安打</th><th>失分</th><th>自責分</th><th>四死</th><th>三振</th><th>滾地/飛球</th></tr>`;
     g.pitching.forEach(l=>{
       h += `<tr><td class="l">${esc(playerName(l.pid))}</td><td>${ipStr(l.outs)}</td><td>${l.H}</td><td>${l.R}</td><td>${l.ER}</td><td>${l.BB}</td><td>${l.SO}</td><td>${(l.GO||0)}/${(l.AO||0)}</td></tr>`;
     });
@@ -853,7 +853,7 @@ function buildScoutReportHTML(){
     h += `<div class="rp-sec">一、對手情蒐${sc.source==="manual"?"（教練觀察）":"（AI 整理，請自行核對）"}</div>`;
     if(sc.summary) h += `<p><b>整體觀察：</b>${esc(sc.summary)}</p>`;
     if((sc.keyPlayers||[]).length){
-      h += `<table><thead><tr><th class="l">指標人物</th><th>角色</th><th>左右</th><th class="l">留意說明</th></tr></thead><tbody>`;
+      h += `<table><tbody><tr><th class="l">指標人物</th><th>角色</th><th>左右</th><th class="l">留意說明</th></tr>`;
       sc.keyPlayers.forEach(k=>{
         h += `<tr><td class="l"><b>${esc(k.name)}</b></td><td>${esc(k.role||"—")}</td><td>${esc(k.hand||"不明")}</td><td class="l">${esc(k.note||"")}</td></tr>`;
       });
@@ -881,7 +881,7 @@ function buildScoutReportHTML(){
       .map(p=>({p,m:bAgg[p.id]})).sort((a,b)=>(b.m.OPS||0)-(a.m.OPS||0));
     if(bRows.length){
       h += `<div class="rp-sec">${sc?"三":"二"}、我方打者近況</div>
-      <table><thead><tr><th class="l">球員</th><th>投打</th><th>場次</th><th>打數</th><th>安打</th><th>全壘打</th><th>四死</th><th>打點</th><th>三振</th><th>盜壘</th><th>打擊率</th><th>上壘率</th><th>長打率</th><th>OPS</th></tr></thead><tbody>`;
+      <table><tbody><tr><th class="l">球員</th><th>投打</th><th>場次</th><th>打數</th><th>安打</th><th>全壘打</th><th>四死</th><th>打點</th><th>三振</th><th>盜壘</th><th>打擊率</th><th>上壘率</th><th>長打率</th><th>OPS</th></tr>`;
       bRows.forEach(({p,m})=>{
         const hand = (p.throws?p.throws+"投":"") + (p.bats?(p.bats==="兩"?"左右":p.bats)+"打":"") || "—";
         h += `<tr><td class="l"><b>${esc(p.name)}</b>${p.num?` #${esc(p.num)}`:""}</td><td>${hand}</td>
@@ -894,7 +894,7 @@ function buildScoutReportHTML(){
       .map(p=>({p,m:pAgg[p.id]})).sort((a,b)=>(isFinite(a.m.ERA)?a.m.ERA:1e9)-(isFinite(b.m.ERA)?b.m.ERA:1e9));
     if(pRows.length){
       h += `<div class="rp-sec">${sc?"四":"三"}、我方投手近況</div>
-      <table><thead><tr><th class="l">球員</th><th>投</th><th>場次</th><th>局數</th><th>被安打</th><th>四死</th><th>三振</th><th>防禦率</th><th>WHIP</th><th>K/9</th><th>滾飛比</th></tr></thead><tbody>`;
+      <table><tbody><tr><th class="l">球員</th><th>投</th><th>場次</th><th>局數</th><th>被安打</th><th>四死</th><th>三振</th><th>防禦率</th><th>WHIP</th><th>K/9</th><th>滾飛比</th></tr>`;
       pRows.forEach(({p,m})=>{
         h += `<tr><td class="l"><b>${esc(p.name)}</b>${p.num?` #${esc(p.num)}`:""}</td><td>${p.throws?p.throws+"投":"—"}</td>
           <td>${m.gp}</td><td>${ipStr(m.outs)}</td><td>${m.H}</td><td>${m.BB}</td><td>${m.SO}</td>
