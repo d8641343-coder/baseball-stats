@@ -630,6 +630,11 @@ async function aiPickMVP(){
     period = document.getElementById("aiMonth").value;
     if(!period) return toast("請選擇月份");
     games = lvlGames().filter(g=>g.date.startsWith(period));
+  }else if(scope==="tour"){
+    period = document.getElementById("aiTour").value;
+    if(!period) return toast("請選擇賽事名稱");
+    // 依賽事名稱評選，不受頂部賽事篩選影響（僅套用目前階級）
+    games = sortedGames().filter(g=> (lvl==="all"||(g.level||"U12")===lvl) && (g.tour||"").trim()===period);
   }else{
     period = String(document.getElementById("aiYear").value||"").trim();
     if(!/^\d{4}$/.test(period)) return toast("請輸入年度，例：2026");
@@ -643,7 +648,8 @@ async function aiPickMVP(){
   btn.disabled = true; btn.innerHTML = `<span class="spinner"></span>AI 評選中…`;
   document.getElementById("aiResult").innerHTML = "";
   try{
-    const prompt = `你是少棒/青棒球隊的數據分析師。以下是「${state.teamName}」${period} 期間（階級：${lvl==="all"?"全隊":lvl}）的球員累積數據。
+    const scopeDesc = scope==="tour" ? `「${period}」這項賽事` : `${period} 期間`;
+    const prompt = `你是少棒/青棒球隊的數據分析師。以下是「${state.teamName}」${scopeDesc}（階級：${lvl==="all"?"全隊":lvl}）的球員累積數據。
 請評選一位「投手 MVP」與一位「野手 MVP」（野手依打擊表現）。評選需兼顧數據品質與樣本量（局數/打席太少者謹慎給獎）。
 ${statsDigest(games)}
 只回傳 JSON，不要任何其他文字或 markdown 標記，格式：
@@ -653,13 +659,13 @@ ${statsDigest(games)}
     const clean = text.replace(/```json|```/g,"").trim();
     const r = JSON.parse(clean);
     const findPid = n => { const p = state.players.find(p=>p.name===n); return p?p.id:null; };
-    const honor = { id:uid(), type: scope==="month"?"monthly":"yearly", period, level:lvl,
+    const honor = { id:uid(), type: scope==="month"?"monthly":scope==="tour"?"tournament":"yearly", period, level:lvl,
       pitcher: r.pitcher&&r.pitcher.name ? {pid:findPid(r.pitcher.name), name:r.pitcher.name, reason:r.pitcher.reason} : null,
       fielder: r.fielder&&r.fielder.name ? {pid:findPid(r.fielder.name), name:r.fielder.name, reason:r.fielder.reason} : null,
       summary: r.summary||"", created: Date.now() };
     document.getElementById("aiResult").innerHTML = `
       <div class="honor">
-        <span class="tag">${scope==="month"?"當月":"年度"} MVP 評選結果 · ${esc(period)}</span>
+        <span class="tag">${honorScopeLabel(honor.type)} MVP 評選結果 · ${esc(period)}</span>
         <div class="who">⚾ 投手 MVP：<b>${honor.pitcher?esc(honor.pitcher.name):"從缺"}</b></div>
         <div class="why">${esc(honor.pitcher?honor.pitcher.reason:(r.pitcher&&r.pitcher.reason)||"數據不足")}</div>
         <div class="who" style="margin-top:8px">🏏 野手 MVP：<b>${honor.fielder?esc(honor.fielder.name):"從缺"}</b></div>

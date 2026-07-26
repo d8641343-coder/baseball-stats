@@ -402,7 +402,7 @@ function openProfile(pid){
     c.svp ? `<span class="hpill">🥈 單場 SVP × ${c.svp}</span>` : "",
     ...c.ai.map(h=>{
       const role = h.pitcher&&h.pitcher.pid===pid ? "投手" : "野手";
-      return `<span class="hpill">🏆 ${esc(h.period)} ${h.type==="monthly"?"當月":"年度"}${role} MVP</span>`;
+      return `<span class="hpill">🏆 ${esc(h.period)} ${honorScopeLabel(h.type)}${role} MVP</span>`;
     })
   ].filter(Boolean).join("") || `<span class="hint">尚無獲獎紀錄，繼續加油！</span>`;
 
@@ -500,6 +500,7 @@ function renderScouts(){
     </div>`).join("") : `<div class="empty">尚無情蒐報告。賽前先用上方任一方式建立，比賽卡片就會自動出現「對手情蒐」捷徑。</div>`;
 }
 function renderHonors(){
+  if(document.getElementById("aiScope")?.value==="tour") fillAiTour();
   // 單場 MVP 列表
   const gm = lvlGames().filter(g=>g.mvp||g.svp||g.aiMvp||g.aiSvp).slice().reverse();
   const aiCell = a => a ? `${a.pid?nameLink(a.pid):esc(a.name)}${a.reason?`<span class="hint" title="${esc(a.reason)}"> ⓘ</span>`:""}` : "-";
@@ -514,7 +515,7 @@ function renderHonors(){
   const hs = state.honors.filter(h=> lvl==="all" || h.level==="all" || h.level===lvl).slice().reverse();
   document.getElementById("honorList").innerHTML = hs.length ? hs.map(h=>`
     <div class="honor">
-      <span class="tag">${h.type==="monthly"?"當月":"年度"} MVP · ${esc(h.period)}${h.level&&h.level!=="all"?` · ${esc(h.level)}`:""}</span>
+      <span class="tag">${honorScopeLabel(h.type)} MVP · ${esc(h.period)}${h.level&&h.level!=="all"?` · ${esc(h.level)}`:""}</span>
       <button class="del" style="float:right" onclick="delHonor('${h.id}')">✕</button>
       <div class="who">⚾ 投手 MVP：<b>${h.pitcher?(h.pitcher.pid?nameLink(h.pitcher.pid):esc(h.pitcher.name)):"從缺"}</b></div>
       ${h.pitcher?`<div class="why">${esc(h.pitcher.reason)}</div>`:""}
@@ -628,7 +629,17 @@ document.getElementById("ovSquadChips").addEventListener("click", e=>{
 document.getElementById("aiScope").onchange = function(){
   document.getElementById("aiMonthFld").style.display = this.value==="month"?"":"none";
   document.getElementById("aiYearFld").style.display = this.value==="year"?"":"none";
+  document.getElementById("aiTourFld").style.display = this.value==="tour"?"":"none";
+  if(this.value==="tour") fillAiTour();
 };
+// 用目前的賽事名稱填入「賽事 MVP」下拉（保留原選取）
+function fillAiTour(){
+  const sel = document.getElementById("aiTour"); if(!sel) return;
+  const names = tourNames(), cur = sel.value;
+  sel.innerHTML = names.length
+    ? names.map(n=>`<option value="${esc(n)}"${n===cur?" selected":""}>${esc(n)}</option>`).join("")
+    : `<option value="">（尚無賽事名稱）</option>`;
+}
 
 (async () => {
   document.getElementById("appVer").textContent = APP_VERSION;

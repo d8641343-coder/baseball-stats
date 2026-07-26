@@ -1,5 +1,5 @@
 /* ───────── 版本(每次發布前更新此處) ───────── */
-const APP_VERSION = "v1.11.6 · 2026-07-24";
+const APP_VERSION = "v1.12.0 · 2026-07-26";
 
 /* ───────── 階級與 ERA 局制基準(單一來源，新增/調整階級改這裡) ───────── */
 const LEVELS = ["U12","U15","U18","OB","其他"];
@@ -43,6 +43,8 @@ function tourNames(){
   state.games.forEach(g => { const t=(g.tour||"").trim(); if(t) set.add(t); });
   return [...set].sort((a,b)=>a.localeCompare(b));
 }
+// 榮譽榜評選範圍的中文標籤（monthly=當月／tournament=賽事／yearly=年度）
+function honorScopeLabel(type){ return type==="monthly" ? "當月" : type==="tournament" ? "賽事" : "年度"; }
 // 依區間切片：all=全部；1m=近一個月（依日期）；數字=近 N 場
 function sliceWindow(g, w){
   if(w==="all") return g;

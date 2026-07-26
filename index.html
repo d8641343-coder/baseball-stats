@@ -8,7 +8,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
-<link rel="stylesheet" href="css/style.css?v=1.11.6">
+<link rel="stylesheet" href="css/style.css?v=1.12.0">
 </head>
 <body>
 
@@ -184,10 +184,12 @@
         <select id="aiScope">
           <option value="month">當月 MVP</option>
           <option value="year">年度 MVP</option>
+          <option value="tour">賽事 MVP</option>
         </select>
       </div>
       <div class="fld" id="aiMonthFld"><label>月份</label><input type="month" id="aiMonth"></div>
       <div class="fld" id="aiYearFld" style="display:none"><label>年度</label><input type="number" id="aiYear" style="width:90px"></div>
+      <div class="fld" id="aiTourFld" style="display:none"><label>賽事名稱</label><select id="aiTour" style="width:150px"></select></div>
       <button class="btn gold" id="aiBtn" onclick="aiPickMVP()">🏆 AI 開始評選</button>
     </div>
     <div id="aiResult"></div>
@@ -398,13 +400,13 @@
 <div id="pdfStage" style="position:absolute;left:-10000px;top:0;width:794px;background:#fff"></div>
 <div class="toast" id="toast"></div>
 
-<script src="js/firebase-config.js?v=1.11.6"></script>
-<script src="js/data.js?v=1.11.6"></script>
-<script src="js/auth.js?v=1.11.6"></script>
-<script src="js/batting.js?v=1.11.6"></script>
-<script src="js/pitching.js?v=1.11.6"></script>
-<script src="js/fielding.js?v=1.11.6"></script>
-<script src="js/scout.js?v=1.11.6"></script>
-<script src="js/ui.js?v=1.11.6"></script>
+<script src="js/firebase-config.js?v=1.12.0"></script>
+<script src="js/data.js?v=1.12.0"></script>
+<script src="js/auth.js?v=1.12.0"></script>
+<script src="js/batting.js?v=1.12.0"></script>
+<script src="js/pitching.js?v=1.12.0"></script>
+<script src="js/fielding.js?v=1.12.0"></script>
+<script src="js/scout.js?v=1.12.0"></script>
+<script src="js/ui.js?v=1.12.0"></script>
 </body>
 </html>
