@@ -87,7 +87,8 @@ async function aiGate(feature){
   }
 }
 
-async function callClaude(prompt, useWeb, feature){
+// temperature 預設 0.3：情蒐/整理/判定類求穩、少腦補、JSON 格式聽話；賽後焦點小編文另傳 0.9 求活潑
+async function callClaude(prompt, useWeb, feature, temperature = 0.3){
   if(!aiEnabled()) throw new Error("尚未設定 API Key");
   const model = aiConf.model || "claude-sonnet-4-6";
   // Haiku 只支援基本版網路搜尋工具；4.6+ 用含動態過濾的新版
@@ -96,7 +97,7 @@ async function callClaude(prompt, useWeb, feature){
   let text = "", inTok = 0, outTok = 0;
   try{
     for(let round = 0; round < 2; round++){
-      const body = { model, max_tokens:1600, messages };
+      const body = { model, max_tokens:1600, temperature, messages };
       // max_uses 封頂單次呼叫的搜尋輪數：每多搜一次就要把前面全部結果重送一次當 input，
       // 不設上限容易被沒查到精準資料時瘋狂換關鍵字搜到爆量 token
       if(useWeb) body.tools = [{type:webTool, name:"web_search", max_uses:4}];
@@ -514,7 +515,7 @@ ${cmts?`\n現場講評記錄：\n${cmts}\n`:""}
 2.「🔥 賽後焦點」：介紹其餘 2~4 位有亮點的球員，各自用一個有趣的暱稱/小標題帶出重點數據。
 3.「🎙️ 總結」：簡短總結整場比賽氣氛與團隊精神，正向收尾。
 全文約 400~600 字，語氣活潑、可用表情符號，但提到的數字（打數/安打/打點等）必須跟上面提供的數據一致，不可加總或換算錯誤。直接輸出文章內容本身，不要加 markdown 符號（#、**），用換行分段即可。`;
-    const text = await callClaude(prompt, false, "highlight");
+    const text = await callClaude(prompt, false, "highlight", 0.9);
     g.aiHighlight = { text: text.trim(), created: Date.now(), level: g.level };
     save(); renderAll(); openCard(gid);
     toast("賽後焦點總結已產生");
