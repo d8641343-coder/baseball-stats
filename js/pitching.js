@@ -1,6 +1,6 @@
 const VSB_TXT = {R:"右打為主", L:"左打為主", M:"混合", "":"-"};
 function pitSplitAgg(games, pid){
-  const mk = ()=>({outs:0,H:0,R:0,ER:0,BB:0,SO:0,gp:0,wER:0,GO:0,AO:0});
+  const mk = ()=>({outs:0,H:0,R:0,ER:0,BB:0,SO:0,gp:0,wER:0,GO:0,AO:0,S:0,B:0});
   const r = {R:mk(), L:mk()};
   games.forEach(g=>(g.pitching||[]).forEach(l=>{
     if(l.pid!==pid) return;
@@ -8,7 +8,7 @@ function pitSplitAgg(games, pid){
     if(!key) return;
     r[key].gp++; r[key].outs+=(l.outs||0);
     r[key].wER += (l.ER||0) * eraBaseOf(g.level);
-    ["H","R","ER","BB","SO","GO","AO"].forEach(k=>r[key][k]+=(l[k]||0));
+    ["H","R","ER","BB","SO","GO","AO","S","B"].forEach(k=>r[key][k]+=(l[k]||0));
   }));
   finishPit(r.R); finishPit(r.L);
   return r;
@@ -18,10 +18,10 @@ function pitSplitAgg(games, pid){
 function pitchingAgg(games){
   const map = {};
   games.forEach(g => (g.pitching||[]).forEach(l => {
-    const m = map[l.pid] = map[l.pid] || {gp:0,outs:0,H:0,R:0,ER:0,BB:0,SO:0,wER:0,GO:0,AO:0};
+    const m = map[l.pid] = map[l.pid] || {gp:0,outs:0,H:0,R:0,ER:0,BB:0,SO:0,wER:0,GO:0,AO:0,S:0,B:0};
     m.gp++; m.outs += (l.outs||0);
     m.wER += (l.ER||0) * eraBaseOf(g.level);
-    ["H","R","ER","BB","SO","GO","AO"].forEach(k => m[k]+= (l[k]||0));
+    ["H","R","ER","BB","SO","GO","AO","S","B"].forEach(k => m[k]+= (l[k]||0));
   }));
   Object.values(map).forEach(m => finishPit(m));
   return map;
@@ -38,10 +38,14 @@ function finishPit(m){
   m.K9 = ip ? m.SO*9/ip : NaN;
   m.BB9 = ip ? m.BB*9/ip : NaN;
   m.GOAO = (m.AO||0) > 0 ? (m.GO||0)/m.AO : ((m.GO||0) > 0 ? Infinity : NaN);
+  // 用球數：S=好球、B=壞球（皆手動輸入），NP 總用球數程式計算、不另存
+  m.NP = (m.S||0) + (m.B||0);
+  m.SPCT = m.NP ? (m.S||0) / m.NP : NaN;          // 好球率
+  m.PPI = (m.NP && ip) ? m.NP / ip : NaN;          // 每局用球數
   return m;
 }
 function sumPit(map){
-  const t = {outs:0,H:0,R:0,ER:0,BB:0,SO:0,wER:0,GO:0,AO:0};
+  const t = {outs:0,H:0,R:0,ER:0,BB:0,SO:0,wER:0,GO:0,AO:0,S:0,B:0};
   Object.values(map).forEach(m => Object.keys(t).forEach(k => t[k]+=(m[k]||0)));
   return finishPit(t);
 }

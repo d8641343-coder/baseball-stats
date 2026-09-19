@@ -1,5 +1,5 @@
 /* ───────── 版本(每次發布前更新此處) ───────── */
-const APP_VERSION = "v1.12.1 · 2026-07-26";
+const APP_VERSION = "v1.13.0 · 2026-09-19";
 
 /* ───────── 階級與 ERA 局制基準(單一來源，新增/調整階級改這裡) ───────── */
 const LEVELS = ["U12","U15","U18","OB","其他"];
@@ -21,6 +21,7 @@ function playerName(id){ const p = getP(id); return p ? p.name : "（已移除�
 /* ── 照片處理（支援 JPG/PNG/HEIC/HEIF，自動壓縮） ── */
 const f3 = v => isFinite(v) ? v.toFixed(3).replace(/^0\./,".") : "-";
 const f2 = v => isFinite(v) ? v.toFixed(2) : "-";
+const fpct = v => isFinite(v) ? Math.round(v*100)+"%" : "-";   // 比率→整數百分比，無資料顯示 -
 function ipStr(outs){ return Math.floor(outs/3) + (outs%3 ? "."+outs%3 : ".0"); }
 function parseIP(s){
   const m = String(s).trim().match(/^(\d+)(?:\.([012]))?$/);
@@ -319,7 +320,7 @@ function addPitLine(gid){
   const outs = parseIP(document.getElementById("pIP-"+gid).value);
   if(outs===null) return toast("局數格式錯誤，例：2、2.1、2.2");
   const line = {pid, outs, vsB: document.getElementById("pvsB-"+gid).value};
-  ["H","R","ER","BB","SO","GO","AO"].forEach(k => line[k] = Math.max(0, Number(document.getElementById("p"+k+"-"+gid).value)||0));
+  ["H","R","ER","BB","SO","GO","AO","S","B"].forEach(k => line[k] = Math.max(0, Number(document.getElementById("p"+k+"-"+gid).value)||0));
   if(line.ER > line.R) return toast("自責分不可大於失分");
   const pend = pendingErAI[gid];
   if(pend && pend.pid === pid) line.erAI = {reason: pend.reason, desc: pend.desc};
@@ -357,7 +358,7 @@ function saveEditPitLine(gid, i){
   const outs = parseIP(document.getElementById(`epIP-${gid}-${i}`).value);
   if(outs===null) return toast("局數格式錯誤，例：2、2.1、2.2");
   const line = {pid:cur.pid, outs, vsB:document.getElementById(`epvsB-${gid}-${i}`).value};
-  ["H","R","ER","BB","SO","GO","AO"].forEach(k => line[k] = Math.max(0, Number(document.getElementById(`ep${k}-${gid}-${i}`).value)||0));
+  ["H","R","ER","BB","SO","GO","AO","S","B"].forEach(k => line[k] = Math.max(0, Number(document.getElementById(`ep${k}-${gid}-${i}`).value)||0));
   if(line.ER > line.R) return toast("自責分不可大於失分");
   if(cur.erAI && line.ER === cur.ER) line.erAI = cur.erAI;   // ER 數字未變，AI 判定依據仍然有效
   g.pitching[i] = line; editLine = null; save(); renderAll(); openCard(gid); toast("已更新投球紀錄");
@@ -428,7 +429,7 @@ function setEraBaseLvl(level, v){
 const IMP_FORMATS = {
   roster: "欄位順序：姓名, 背號, 守位, 階級(U12/U15/U18/OB/其他), 投(右/左), 打(右/左/兩), 大頭照網址\n範例：王小明, 12, SS, U12, 右, 左, https://.../photo.jpg（投打與照片可留空）",
   batting: "欄位順序：日期, 對手, 姓名, 打數, 安打, 二安, 三安, 全壘打, 四死, 犧飛, 得分, 打點, 三振, 盜壘, 面對投手(右/左/混)\n範例：2026-07-05, 向上, 王小明, 4, 2, 1, 0, 0, 1, 0, 1, 2, 0, 1, 右（日期後欄位可留空，視為 0 或不明）",
-  pitching: "欄位順序：日期, 對手, 姓名, 局數(2.1=2又1/3), 被安打, 失分, 自責分, 四死, 三振, 面對打線(右/左/混), 滾地出局, 飛球出局\n範例：2026-07-05, 向上, 王小明, 3.2, 4, 2, 1, 3, 5, 右, 6, 3（後面欄位可留空）"
+  pitching: "欄位順序：日期, 對手, 姓名, 局數(2.1=2又1/3), 被安打, 失分, 自責分, 四死, 三振, 面對打線(右/左/混), 滾地出局, 飛球出局, 好球, 壞球\n範例：2026-07-05, 向上, 王小明, 3.2, 4, 2, 1, 3, 5, 右, 6, 3, 38, 19（後面欄位可留空）"
 };
 const HAND_MAP = {"右":"R","左":"L","混":"M","混合":"M"};
 /* 伏せ字マッチ：吳O淏 之類（中間字被網站遮成 O/○/〇/＊/* 等）對映到既有球員 吳丞淏。
@@ -499,7 +500,7 @@ function runImport(){
         const g = findOrCreateGame(date, opp, level);
         const v = k => Math.max(0, parseInt(n[k])||0);
         g.pitching.push({pid:p.id, outs, H:v(0),R:v(1),ER:v(2),BB:v(3),SO:v(4),
-          vsB: HAND_MAP[(n[5]||"").trim()]||"", GO:v(6), AO:v(7)}); ok++;
+          vsB: HAND_MAP[(n[5]||"").trim()]||"", GO:v(6), AO:v(7), S:v(8), B:v(9)}); ok++;
       }
     }catch(err){ skip.push(`第 ${idx+1} 行：${err}`); }
   });
@@ -537,8 +538,8 @@ function exportImpTemplate(){
   }else{
     const roster = csvRosterByLevel(level);
     if(!roster.length){ toast(`目前沒有 ${level} 階級的球員名單，請先建立名單`); return; }
-    header = ["日期","對手","姓名","局數(2.1=2又1/3)","被安打","失分","自責分","四死","三振","面對打線(右/左/混)","滾地出局","飛球出局"];
-    rows = roster.map(p=>[today,"",p.name,"","","","","","","","",""]);
+    header = ["日期","對手","姓名","局數(2.1=2又1/3)","被安打","失分","自責分","四死","三振","面對打線(右/左/混)","滾地出局","飛球出局","好球","壞球"];
+    rows = roster.map(p=>[today,"",p.name,"","","","","","","","","","",""]);
   }
   const csv = "﻿" + [header, ...rows].map(r=>r.map(csvCell).join(",")).join("\r\n");
   const blob = new Blob([csv], {type:"text/csv;charset=utf-8"});

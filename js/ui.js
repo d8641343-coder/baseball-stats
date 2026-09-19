@@ -179,6 +179,7 @@ function renderGames(){
           <td class="l">${nameLink(l.pid)}</td>
           <td><input value="${ipStr(l.outs)}" id="epIP-${g.id}-${i}" style="width:44px"></td>
           ${["H","R","ER","BB","SO"].map(k=>`<td><input type="number" min="0" value="${l[k]||0}" id="ep${k}-${g.id}-${i}"></td>`).join("")}
+          <td style="white-space:nowrap"><input type="number" min="0" value="${l.S||0}" id="epS-${g.id}-${i}" style="width:38px" title="好球">/<input type="number" min="0" value="${l.B||0}" id="epB-${g.id}-${i}" style="width:38px" title="壞球"></td>
           <td style="white-space:nowrap"><input type="number" min="0" value="${l.GO||0}" id="epGO-${g.id}-${i}" style="width:38px">/<input type="number" min="0" value="${l.AO||0}" id="epAO-${g.id}-${i}" style="width:38px"></td>
           <td><select id="epvsB-${g.id}-${i}"><option value=""${!l.vsB?" selected":""}>不明</option><option value="R"${l.vsB==="R"?" selected":""}>右</option><option value="L"${l.vsB==="L"?" selected":""}>左</option><option value="M"${l.vsB==="M"?" selected":""}>混</option></select></td>
           <td class="num">-</td>
@@ -187,6 +188,7 @@ function renderGames(){
       return `<tr>
       <td class="l">${nameLink(l.pid)}</td><td class="num">${ipStr(l.outs)}</td><td class="num">${l.H}</td>
       <td class="num">${l.R}</td><td class="num">${l.ER}${l.erAI?`<button style="cursor:pointer;background:none;border:none;padding:0 2px;font-size:14px" title="點看 AI 判定依據" onclick="showErReason('${g.id}',${i})">🤖</button>`:""}</td><td class="num">${l.BB}</td><td class="num">${l.SO}</td>
+      <td class="num">${((l.S||0)+(l.B||0)) ? `${(l.S||0)+(l.B||0)}（${l.S||0}/${l.B||0}）` : "-"}</td>
       <td class="num">${(l.GO||0)}/${(l.AO||0)}</td>
       <td>${VSB_TXT[l.vsB||""]}</td>
       <td class="num">${l.outs?f2(l.ER*eraBaseOf(g.level)*3/l.outs):"-"}</td>
@@ -271,11 +273,11 @@ function renderGames(){
         </div>
 
         <div class="subhead">投球登錄（局數格式 2.1＝2又1/3局；四死含觸身）</div>
-        ${pitRows?`<div class="tblwrap"><table><thead><tr><th class="l">球員</th><th>局數</th><th>被安打</th><th>失分</th><th>自責分</th><th>四死</th><th>三振</th><th>滾地/飛球</th><th>面對打線</th><th>單場ERA</th><th></th></tr></thead><tbody>${pitRows}</tbody></table></div>`:`<div class="hint">尚未登錄投球數據。</div>`}
+        ${pitRows?`<div class="tblwrap"><table><thead><tr><th class="l">球員</th><th>局數</th><th>被安打</th><th>失分</th><th>自責分</th><th>四死</th><th>三振</th><th>用球數</th><th>滾地/飛球</th><th>面對打線</th><th>單場ERA</th><th></th></tr></thead><tbody>${pitRows}</tbody></table></div>`:`<div class="hint">尚未登錄投球數據。</div>`}
         <div class="frow edit-only" style="margin-top:6px">
           <div class="fld"><label>球員</label><select id="pp-${g.id}">${playerOptions("", g.level)}</select></div>
           <div class="fld w60"><label>局數</label><input id="pIP-${g.id}" placeholder="2.1"></div>
-          ${["H:被安打","R:失分","ER:自責分","BB:四死","SO:三振","GO:滾地出局","AO:飛球出局"].map(x=>{const[k,l]=x.split(":");return `<div class="fld w60"><label>${l}</label><input type="number" min="0" value="0" id="p${k}-${g.id}"></div>`;}).join("")}
+          ${["H:被安打","R:失分","ER:自責分","BB:四死","SO:三振","GO:滾地出局","AO:飛球出局","S:好球","B:壞球"].map(x=>{const[k,l]=x.split(":");return `<div class="fld w60"><label>${l}</label><input type="number" min="0" value="0" id="p${k}-${g.id}"></div>`;}).join("")}
           <div class="fld"><label>面對打線</label><select id="pvsB-${g.id}"><option value="">不明</option><option value="R">右打為主</option><option value="L">左打為主</option><option value="M">混合</option></select></div>
           <button class="btn sm" onclick="addPitLine('${g.id}')">＋ 登錄</button>
           <button class="btn ghost sm" onclick="toggleErPanel('${g.id}')">🤖 AI 判斷自責分</button>
@@ -363,7 +365,8 @@ function renderBatting(){
 const PIT_GETTERS = {
   name:r=>r.p.name, gp:r=>r.m.gp, outs:r=>r.m.outs, H:r=>r.m.H, R:r=>r.m.R,
   ER:r=>r.m.ER, BB:r=>r.m.BB, SO:r=>r.m.SO, ERA:r=>r.m.ERA, WHIP:r=>r.m.WHIP,
-  K9:r=>r.m.K9, BB9:r=>r.m.BB9, GOAO:r=>r.m.GOAO
+  K9:r=>r.m.K9, BB9:r=>r.m.BB9, GOAO:r=>r.m.GOAO,
+  NP:r=>r.m.NP, SPCT:r=>r.m.SPCT, PPI:r=>r.m.PPI
 };
 function renderPitching(){
   const eb = state.eraBases || {...ERA_BASE_DEFAULT};
@@ -380,11 +383,12 @@ function renderPitching(){
     <td class="num">${m.R}</td><td class="num">${m.ER}</td><td class="num">${m.BB}</td><td class="num">${m.SO}</td>
     <td class="num"><b>${m.ERA===Infinity?"INF":f2(m.ERA)}</b></td><td class="num">${f2(m.WHIP)}</td>
     <td class="num">${f2(m.K9)}</td><td class="num">${f2(m.BB9)}</td>
-    <td class="num">${m.GOAO===Infinity?"全滾地":f2(m.GOAO)}</td></tr>`).join("");
+    <td class="num">${m.GOAO===Infinity?"全滾地":f2(m.GOAO)}</td>
+    <td class="num">${m.NP||"-"}</td><td class="num">${fpct(m.SPCT)}</td><td class="num">${f2(m.PPI)}</td></tr>`).join("");
   document.getElementById("pitTable").innerHTML = `<div class="tblwrap"><table>
-    <thead><tr>${th_("pit","name","球員","l")}${th_("pit","gp","場次")}${th_("pit","outs","局數")}${th_("pit","H","被安打")}${th_("pit","R","失分")}${th_("pit","ER","自責分")}${th_("pit","BB","四死")}${th_("pit","SO","三振")}${th_("pit","ERA","防禦率")}${th_("pit","WHIP","WHIP")}${th_("pit","K9","K/9")}${th_("pit","BB9","BB/9")}${th_("pit","GOAO","滾飛比")}</tr></thead>
-    <tbody>${html}<tr class="total"><td class="l">球隊合計</td><td class="num">${games.length}</td><td class="num">${ipStr(tot.outs)}</td><td class="num">${tot.H}</td><td class="num">${tot.R}</td><td class="num">${tot.ER}</td><td class="num">${tot.BB}</td><td class="num">${tot.SO}</td><td class="num">${f2(tot.ERA)}</td><td class="num">${f2(tot.WHIP)}</td><td class="num">${f2(tot.K9)}</td><td class="num">${f2(tot.BB9)}</td><td class="num">${tot.GOAO===Infinity?"全滾地":f2(tot.GOAO)}</td></tr></tbody></table></div>
-    <div class="hint">防禦率依各場比賽的階級局制換算（U12 ${ (state.eraBases||{}).U12||6 } 局、U15 ${ (state.eraBases||{}).U15||7 } 局、U18 ${ (state.eraBases||{}).U18||7 } 局、OB ${ (state.eraBases||{}).OB||9 } 局、其他 ${ (state.eraBases||{})["其他"]||9 } 局）；K/9、BB/9 固定以每 9 局換算；滾飛比＝滾地出局 ÷ 飛球出局，越高代表越會製造滾地球。</div>`;
+    <thead><tr>${th_("pit","name","球員","l")}${th_("pit","gp","場次")}${th_("pit","outs","局數")}${th_("pit","H","被安打")}${th_("pit","R","失分")}${th_("pit","ER","自責分")}${th_("pit","BB","四死")}${th_("pit","SO","三振")}${th_("pit","ERA","防禦率")}${th_("pit","WHIP","WHIP")}${th_("pit","K9","K/9")}${th_("pit","BB9","BB/9")}${th_("pit","GOAO","滾飛比")}${th_("pit","NP","用球數")}${th_("pit","SPCT","好球率")}${th_("pit","PPI","每局用球")}</tr></thead>
+    <tbody>${html}<tr class="total"><td class="l">球隊合計</td><td class="num">${games.length}</td><td class="num">${ipStr(tot.outs)}</td><td class="num">${tot.H}</td><td class="num">${tot.R}</td><td class="num">${tot.ER}</td><td class="num">${tot.BB}</td><td class="num">${tot.SO}</td><td class="num">${f2(tot.ERA)}</td><td class="num">${f2(tot.WHIP)}</td><td class="num">${f2(tot.K9)}</td><td class="num">${f2(tot.BB9)}</td><td class="num">${tot.GOAO===Infinity?"全滾地":f2(tot.GOAO)}</td><td class="num">${tot.NP||"-"}</td><td class="num">${fpct(tot.SPCT)}</td><td class="num">-</td></tr></tbody></table></div>
+    <div class="hint">防禦率依各場比賽的階級局制換算（U12 ${ (state.eraBases||{}).U12||6 } 局、U15 ${ (state.eraBases||{}).U15||7 } 局、U18 ${ (state.eraBases||{}).U18||7 } 局、OB ${ (state.eraBases||{}).OB||9 } 局、其他 ${ (state.eraBases||{})["其他"]||9 } 局）；K/9、BB/9 固定以每 9 局換算；滾飛比＝滾地出局 ÷ 飛球出局，越高代表越會製造滾地球；用球數＝好球＋壞球，好球率＝好球 ÷ 用球數，每局用球＝用球數 ÷ 局數（僅列個別投手，未登錄好壞球者顯示 -）。</div>`;
 }
 
 /* ───────── 個人歷程 ───────── */
@@ -426,6 +430,9 @@ function openProfile(pid){
       <div class="card"><div class="v">${pit.SO}</div><div class="k">奪三振</div></div>
       <div class="card"><div class="v">${f2(pit.K9)}</div><div class="k">K/9</div></div>
       <div class="card"><div class="v">${pit.GOAO===Infinity?"全滾":isFinite(pit.GOAO)?f2(pit.GOAO):"-"}</div><div class="k">滾飛比</div></div>
+      <div class="card"><div class="v">${pit.NP||"-"}</div><div class="k">用球數</div></div>
+      <div class="card"><div class="v">${fpct(pit.SPCT)}</div><div class="k">好球率</div></div>
+      <div class="card"><div class="v">${f2(pit.PPI)}</div><div class="k">每局用球</div></div>
     </div>` : `<div class="hint">尚無投球數據。</div>`;
 
   const trend = last5.length ? `

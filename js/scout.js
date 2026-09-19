@@ -87,8 +87,8 @@ async function aiGate(feature){
   }
 }
 
-// temperature 預設 0.3：情蒐/整理/判定類求穩、少腦補、JSON 格式聽話；賽後焦點小編文另傳 0.9 求活潑
-async function callClaude(prompt, useWeb, feature, temperature = 0.3){
+// temperature 預設 0.2：情蒐/整理/判定類求穩、少腦補、JSON 格式輸出更聽話；賽後焦點小編文另傳 0.9 求活潑
+async function callClaude(prompt, useWeb, feature, temperature = 0.2){
   if(!aiEnabled()) throw new Error("尚未設定 API Key");
   const model = aiConf.model || "claude-sonnet-4-6";
   // Haiku 只支援基本版網路搜尋工具；4.6+ 用含動態過濾的新版
@@ -435,10 +435,10 @@ function statsDigest(games){
     const p = getP(pid); if(!p || !m.PA) return;
     s += `${p.name}/${p.level||"U12"}：${m.AB},${m.H},${m.HR},${m.BB},${m.RBI},${m.R},${m.SB},${f3(m.AVG)},${f3(m.OBP)},${f3(m.SLG)},${f3(m.OPS)}\n`;
   });
-  s += "\n投手數據（姓名/階級：局數,被安打,失分,自責分,四死,三振,ERA,WHIP）\n";
+  s += "\n投手數據（姓名/階級：局數,被安打,失分,自責分,四死,三振,ERA,WHIP,好球率）\n";
   Object.entries(pAgg).forEach(([pid,m])=>{
     const p = getP(pid); if(!p || !m.outs) return;
-    s += `${p.name}/${p.level||"U12"}：${ipStr(m.outs)},${m.H},${m.R},${m.ER},${m.BB},${m.SO},${m.ERA===Infinity?"INF":f2(m.ERA)},${f2(m.WHIP)}\n`;
+    s += `${p.name}/${p.level||"U12"}：${ipStr(m.outs)},${m.H},${m.R},${m.ER},${m.BB},${m.SO},${m.ERA===Infinity?"INF":f2(m.ERA)},${f2(m.WHIP)},${fpct(m.SPCT)}\n`;
   });
   return s;
 }
@@ -698,7 +698,7 @@ async function aiPlayerAdvice(pid){
     if(ps2.R.outs||ps2.L.outs) d += `投球拆分：對右打為主打線 ${ipStr(ps2.R.outs)} 局 ERA ${ps2.R.ERA===Infinity?"INF":f2(ps2.R.ERA)}，對左打為主 ${ipStr(ps2.L.outs)} 局 ERA ${ps2.L.ERA===Infinity?"INF":f2(ps2.L.ERA)}。\n`;
     if(bat) d += `生涯打擊：${bat.AB} 打數 ${bat.H} 安（二安${bat.d2}/三安${bat.d3}/全壘打${bat.HR}），四死 ${bat.BB}，三振 ${bat.SO}，盜壘 ${bat.SB}，AVG ${f3(bat.AVG)}，OBP ${f3(bat.OBP)}，SLG ${f3(bat.SLG)}，OPS ${f3(bat.OPS)}。\n`;
     if(b5) d += `近5場打擊：${b5.H}-${b5.AB}，OPS ${f3(b5.OPS)}，三振 ${b5.SO}，四死 ${b5.BB}。\n`;
-    if(pit) d += `生涯投球：${ipStr(pit.outs)} 局，被安打 ${pit.H}，四死 ${pit.BB}，三振 ${pit.SO}，自責 ${pit.ER}，ERA ${pit.ERA===Infinity?"INF":f2(pit.ERA)}（依 U12 六局 / U15 七局制換算），WHIP ${f2(pit.WHIP)}，K/9 ${f2(pit.K9)}，BB/9 ${f2(pit.BB9)}${isFinite(pit.GOAO)?"，滾飛比 "+f2(pit.GOAO):""}。\n`;
+    if(pit) d += `生涯投球：${ipStr(pit.outs)} 局，被安打 ${pit.H}，四死 ${pit.BB}，三振 ${pit.SO}，自責 ${pit.ER}，ERA ${pit.ERA===Infinity?"INF":f2(pit.ERA)}（依 U12 六局 / U15 七局制換算），WHIP ${f2(pit.WHIP)}，K/9 ${f2(pit.K9)}，BB/9 ${f2(pit.BB9)}${isFinite(pit.GOAO)?"，滾飛比 "+f2(pit.GOAO):""}${isFinite(pit.SPCT)?"，好球率 "+fpct(pit.SPCT):""}。\n`;
     if(p5) d += `近5場投球：${ipStr(p5.outs)} 局，ERA ${p5.ERA===Infinity?"INF":f2(p5.ERA)}，${p5.SO} K，${p5.BB} 四死。\n`;
     const prompt = `你是親切的青少棒球隊教練兼數據分析師。根據以下球員數據，用繁體中文寫一段給球員與家長看的分析（250字內）：包含 1)近況與亮點 2)可加強之處 3)一個具體練習建議。語氣正面鼓勵、以成長為導向，不要用表格或markdown符號，直接輸出文字。\n${d}`;
     const text = await callClaude(prompt, false, "advice");
@@ -901,11 +901,11 @@ function buildScoutReportHTML(){
       .map(p=>({p,m:pAgg[p.id]})).sort((a,b)=>(isFinite(a.m.ERA)?a.m.ERA:1e9)-(isFinite(b.m.ERA)?b.m.ERA:1e9));
     if(pRows.length){
       h += `<div class="rp-sec">${sc?"四":"三"}、我方投手近況</div>
-      <table><tbody><tr><th class="l">球員</th><th>投</th><th>場次</th><th>局數</th><th>被安打</th><th>四死</th><th>三振</th><th>防禦率</th><th>WHIP</th><th>K/9</th><th>滾飛比</th></tr>`;
+      <table><tbody><tr><th class="l">球員</th><th>投</th><th>場次</th><th>局數</th><th>被安打</th><th>四死</th><th>三振</th><th>防禦率</th><th>WHIP</th><th>K/9</th><th>滾飛比</th><th>用球數</th><th>好球率</th></tr>`;
       pRows.forEach(({p,m})=>{
         h += `<tr><td class="l"><b>${esc(p.name)}</b>${p.num?` #${esc(p.num)}`:""}</td><td>${p.throws?p.throws+"投":"—"}</td>
           <td>${m.gp}</td><td>${ipStr(m.outs)}</td><td>${m.H}</td><td>${m.BB}</td><td>${m.SO}</td>
-          <td><b>${m.ERA===Infinity?"INF":f2(m.ERA)}</b></td><td>${f2(m.WHIP)}</td><td>${f2(m.K9)}</td><td>${m.GOAO===Infinity?"全滾":isFinite(m.GOAO)?f2(m.GOAO):"-"}</td></tr>`;
+          <td><b>${m.ERA===Infinity?"INF":f2(m.ERA)}</b></td><td>${f2(m.WHIP)}</td><td>${f2(m.K9)}</td><td>${m.GOAO===Infinity?"全滾":isFinite(m.GOAO)?f2(m.GOAO):"-"}</td><td>${m.NP||"-"}</td><td>${fpct(m.SPCT)}</td></tr>`;
       });
       h += `</tbody></table>
       <p style="color:#999;font-size:10.5px">防禦率依比賽階級局制換算（U12 ${(state.eraBases||{}).U12||6} 局 / U15 ${(state.eraBases||{}).U15||7} 局 / U18 ${(state.eraBases||{}).U18||7} 局 / OB ${(state.eraBases||{}).OB||9} 局）。</p>`;
