@@ -67,8 +67,10 @@ firestore.rules       Firestore 安全規則備份(實際生效版本在 Firebas
 
 **PitchingLine**
 ```js
-{ pid, outs, vsB: ""|"R"|"L"|"M", H, R, ER, BB, SO, GO, AO }
+{ pid, outs, vsB: ""|"R"|"L"|"M", H, R, ER, BB, SO, GO, AO, S, B, st }
 // outs 用 parseIP()/ipStr() 跟 "2.1" 這類局數字串互轉
+// S=好球、B=壞球(皆使用者手動輸入的整數)；總用球數 NP=S+B 由程式即時算、不另存欄位
+// st=是否先發(布林)；累積「先發次數 GS」由聚合累加。舊紀錄無 S/B/st，所有讀取處以 (l.S||0)、l.st 取值，無資料時三項用球數指標一律顯示 "-"
 ```
 
 **Honor**(AI 評選 MVP/SVP)
@@ -94,7 +96,9 @@ firestore.rules       Firestore 安全規則備份(實際生效版本在 Firebas
 聚合統計物件(`battingAgg`/`finishBat`、`pitchingAgg`/`finishPit` 的回傳值,**不儲存,每次即時計算**):
 ```js
 // 打擊: { gp, AB, H, d2, d3, HR, BB, SF, R, RBI, SO, SB, TB, PA, AVG, OBP, SLG, OPS }
-// 投球: { gp, outs, H, R, ER, BB, SO, wER, GO, AO, ERA, WHIP, K9, BB9, GOAO }
+// 投球: { gp, GS, outs, H, R, ER, BB, SO, wER, GO, AO, S, B, ERA, WHIP, K9, BB9, GOAO, NP, SPCT, PPI }
+//   GS=先發次數(累加 st)；NP=S+B 總用球數；SPCT=好球率(S/NP)；PPI=每局用球(NP/IP)
+//   NP=0 時 SPCT/PPI 為 NaN，顯示層用 fpct()/f2() 轉成 "-"；投球成績表合計列的 PPI 刻意不顯示(每局用球僅列個別投手)
 ```
 
 ## 發布流程(GitHub Pages)
@@ -128,8 +132,8 @@ firestore.rules       Firestore 安全規則備份(實際生效版本在 Firebas
   - `xxxSplitAgg(games, pid)` — 單一球員的左右投/打拆分統計
 - **渲染函式**:`renderX()` 對應同名 section/區塊,無回傳值,直接操作 DOM(`innerHTML`),例如 `renderOverview`/`renderRoster`/`renderGames`/`renderBatting`/`renderPitching`/`renderHonors`/`renderScouts`/`renderHeader`。`renderAll()` 統一呼叫全部 render 函式(整頁重繪,見下方技術債)。
 - **權限守衛**:`canEdit(level)`/`guardEdit(level)` 帶階級參數(可省略);編輯者(editor)可被管理者限定只能編輯特定階級(Firestore member 文件的 `editLevels` 欄位:`"ALL"` 或 `LEVELS` 之一(U12/U15/U18/OB/其他),admin 一律 ALL,存於 `auth.js` 的 `myLevels`)。寫入型函式須先取得該筆資料的階級(`g.level` / `p.level`)再呼叫 `guardEdit(該階級)`;無 level 參數時僅判斷是否具編輯身分(供 `save()` 等通用場景)。`guardAdmin()` 僅管理者。
-- **格式化 helper**:`f3()`/`f2()` 格式化小數,`ipStr()`/`parseIP()` 局數字串互轉,`esc()` HTML escape,`normDate()` 日期正規化。
-- **HTML 片段產生**:回傳字串而非直接操作 DOM 的函式,如 `avatarHTML()`/`nameLink()`/`lvlBadge()`/`handBadge()`/`scoutCardHTML()`。
+- **格式化 helper**:`f3()`/`f2()` 格式化小數,`fpct()` 比率轉整數百分比(非有限值顯示 "-",用於好球率),`ipStr()`/`parseIP()` 局數字串互轉,`esc()` HTML escape,`normDate()` 日期正規化。
+- **HTML 片段產生**:回傳字串而非直接操作 DOM 的函式,如 `avatarHTML()`/`nameLink()`/`lvlBadge()`/`handBadge()`/`startBadge()`(先發標記,inline style 供 html2canvas PDF)/`scoutCardHTML()`。
 
 ## 未來規劃(Roadmap)
 
