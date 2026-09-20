@@ -575,9 +575,10 @@ function buildHighlightPdfHTML(gid){
   }
   if((g.pitching||[]).length){
     h += `<div class="rp-sec">投球登錄</div>
-    <table><tbody><tr><th class="l">球員</th><th>局數</th><th>被安打</th><th>失分</th><th>自責分</th><th>四死</th><th>三振</th><th>滾地/飛球</th></tr>`;
+    <table><tbody><tr><th class="l">球員</th><th>局數</th><th>被安打</th><th>失分</th><th>自責分</th><th>四死</th><th>三振</th><th>用球數(好球/壞球)</th><th>滾地/飛球</th></tr>`;
     g.pitching.forEach(l=>{
-      h += `<tr><td class="l">${esc(playerName(l.pid))}</td><td>${ipStr(l.outs)}</td><td>${l.H}</td><td>${l.R}</td><td>${l.ER}</td><td>${l.BB}</td><td>${l.SO}</td><td>${(l.GO||0)}/${(l.AO||0)}</td></tr>`;
+      const np = (l.S||0)+(l.B||0);
+      h += `<tr><td class="l">${esc(playerName(l.pid))}</td><td>${ipStr(l.outs)}</td><td>${l.H}</td><td>${l.R}</td><td>${l.ER}</td><td>${l.BB}</td><td>${l.SO}</td><td>${np ? `${np}（${l.S||0}/${l.B||0}）` : "-"}</td><td>${(l.GO||0)}/${(l.AO||0)}</td></tr>`;
     });
     h += `</tbody></table>`;
   }

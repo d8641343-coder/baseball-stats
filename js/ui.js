@@ -273,7 +273,7 @@ function renderGames(){
         </div>
 
         <div class="subhead">投球登錄（局數格式 2.1＝2又1/3局；四死含觸身）</div>
-        ${pitRows?`<div class="tblwrap"><table><thead><tr><th class="l">球員</th><th>局數</th><th>被安打</th><th>失分</th><th>自責分</th><th>四死</th><th>三振</th><th>用球數</th><th>滾地/飛球</th><th>面對打線</th><th>單場ERA</th><th></th></tr></thead><tbody>${pitRows}</tbody></table></div>`:`<div class="hint">尚未登錄投球數據。</div>`}
+        ${pitRows?`<div class="tblwrap"><table><thead><tr><th class="l">球員</th><th>局數</th><th>被安打</th><th>失分</th><th>自責分</th><th>四死</th><th>三振</th><th>用球數(好球/壞球)</th><th>滾地/飛球</th><th>面對打線</th><th>單場ERA</th><th></th></tr></thead><tbody>${pitRows}</tbody></table></div>`:`<div class="hint">尚未登錄投球數據。</div>`}
         <div class="frow edit-only" style="margin-top:6px">
           <div class="fld"><label>球員</label><select id="pp-${g.id}">${playerOptions("", g.level)}</select></div>
           <div class="fld w60"><label>局數</label><input id="pIP-${g.id}" placeholder="2.1"></div>
