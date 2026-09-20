@@ -48,7 +48,7 @@ async function handleAuth(user){
       mem = { email:user.email||"", name:user.displayName||"", role:"viewer", approved:false, created:Date.now() };
       await memRef.set(mem);
     }
-    if(!mem.approved){ showPending(user); return; }
+    if(!mem.approved){ showPending(user, mem); return; }
     myLevels = mem.role==="admin" ? "ALL" : (mem.editLevels || "ALL");
     await enterAs(mem.role);
   }catch(e){
@@ -93,13 +93,27 @@ function showLogin(){
     <p style="font-size:14px;margin:8px 0 14px">請用 Google 帳號登入。首次登入需經管理者核准後才能檢視球隊資料。</p>
     <button class="btn gold" onclick="login()">🔑 使用 Google 登入</button>`);
 }
-function showPending(user){
+function showPending(user, mem){
+  const intro = (mem && mem.intro) || "";
   authBody(`
     <div style="text-align:left;font-size:14px;background:#fdf3d7;border:1px solid #ecd48a;border-radius:8px;padding:12px;margin:10px 0">
       你已用 <b>${esc(user.email||"")}</b> 登入。<br><br>
       帳號 <b>尚待管理者核准</b>，核准後重新整理即可檢視。請通知管理者到「權限管理」核准你。
     </div>
+    <div style="text-align:left;margin:12px 0">
+      <label style="font-size:13px;display:block;margin-bottom:4px">你是誰？填一句讓管理者認得你（例：王小明的爸爸）</label>
+      <input id="pendIntro" maxlength="30" value="${esc(intro)}" placeholder="例：王小明的爸爸／U12 教練" style="width:100%;box-sizing:border-box;padding:8px;font-size:14px">
+      <button class="btn gold sm" style="margin-top:8px" onclick="savePendingIntro()">送出給管理者</button>
+    </div>
     <button class="btn ghost" onclick="logout()">換帳號 / 登出</button>`);
+}
+async function savePendingIntro(){
+  if(!currentUser) return;
+  const v = document.getElementById("pendIntro").value.trim().slice(0,30);
+  try{
+    await firebase.firestore().doc("teams/warriors/members/"+currentUser.uid).set({intro:v}, {merge:true});
+    toast("已送出，請通知管理者核准");
+  }catch(e){ toast("送出失敗："+(e.code||e.message||"")); }
 }
 function showFatal(msg){
   authBody(`<div style="text-align:left;font-size:14px;background:#fdecea;border:1px solid #f5c2c0;border-radius:8px;padding:12px;margin:10px 0">
@@ -174,7 +188,8 @@ function renderPerm(){
       const actions = isOwner ? `<span class="hint">擁有者</span>` :
         `${m.approved ? "" : `<button class="btn gold sm" onclick="approveMember('${m.uid}')">核准</button> `}
          <button class="btn warn sm" onclick="removeMember('${m.uid}')">移除</button>`;
-      return `<tr><td class="l">${esc(m.email||m.uid)}</td><td>${roleSel}</td><td>${lvlSel}</td><td>${status}</td><td>${actions}</td></tr>`;
+      const who = `${m.name?`<b>${esc(m.name)}</b><br>`:""}<span class="hint">${esc(m.email||m.uid)}</span>${m.intro?`<br><span class="hint" style="color:#8a6410">「${esc(m.intro)}」</span>`:""}`;
+      return `<tr><td class="l">${who}</td><td>${roleSel}</td><td>${lvlSel}</td><td>${status}</td><td>${actions}</td></tr>`;
     }).join("") + `</tbody></table></div>`;
 }
 function memberEmail(uid){ const m = membersList.find(x=>x.uid===uid); return m ? (m.email||uid) : uid; }

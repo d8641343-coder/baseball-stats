@@ -1,5 +1,5 @@
 rules_version = '2';
-// 親子勇士 WARRIORS — Firestore 安全規則（v1.7.0）
+// 親子勇士 WARRIORS — Firestore 安全規則（v1.8.0）
 // 部署方式：Firebase Console → Firestore Database → 規則 → 全部貼上取代 → 發布
 service cloud.firestore {
   match /databases/{db}/documents {
@@ -33,7 +33,10 @@ service cloud.firestore {
       // 新登入者可替自己建立「待核准的唯讀」檔；擁有者可 bootstrap 自己的管理者檔
       allow create: if signedIn() && request.auth.uid == uid &&
         (isOwner() || (request.resource.data.role == 'viewer' && request.resource.data.approved == false));
-      allow update: if isAdmin() || (isOwner() && request.auth.uid == uid);
+      // 本人可改自己的檔，但只准動 name / intro（自我介紹）；不得碰 role / approved / editLevels
+      allow update: if isAdmin() || (isOwner() && request.auth.uid == uid) ||
+        (signedIn() && request.auth.uid == uid &&
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name','intro']));
       allow delete: if isAdmin();
     }
 
