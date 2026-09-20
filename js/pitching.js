@@ -1,12 +1,13 @@
 const VSB_TXT = {R:"右打為主", L:"左打為主", M:"混合", "":"-"};
 function pitSplitAgg(games, pid){
-  const mk = ()=>({outs:0,H:0,R:0,ER:0,BB:0,SO:0,gp:0,wER:0,GO:0,AO:0,S:0,B:0});
+  const mk = ()=>({outs:0,H:0,R:0,ER:0,BB:0,SO:0,gp:0,wER:0,GO:0,AO:0,S:0,B:0,npOuts:0});
   const r = {R:mk(), L:mk()};
   games.forEach(g=>(g.pitching||[]).forEach(l=>{
     if(l.pid!==pid) return;
     const key = l.vsB==="R"?"R":l.vsB==="L"?"L":null;
     if(!key) return;
     r[key].gp++; r[key].outs+=(l.outs||0);
+    if((l.S||0)+(l.B||0) > 0) r[key].npOuts += (l.outs||0);   // 只累加有登錄用球數的出局數（每局用球分母用）
     r[key].wER += (l.ER||0) * eraBaseOf(g.level);
     ["H","R","ER","BB","SO","GO","AO","S","B"].forEach(k=>r[key][k]+=(l[k]||0));
   }));
@@ -18,9 +19,10 @@ function pitSplitAgg(games, pid){
 function pitchingAgg(games){
   const map = {};
   games.forEach(g => (g.pitching||[]).forEach(l => {
-    const m = map[l.pid] = map[l.pid] || {gp:0,outs:0,H:0,R:0,ER:0,BB:0,SO:0,wER:0,GO:0,AO:0,S:0,B:0,GS:0};
+    const m = map[l.pid] = map[l.pid] || {gp:0,outs:0,H:0,R:0,ER:0,BB:0,SO:0,wER:0,GO:0,AO:0,S:0,B:0,GS:0,npOuts:0};
     m.gp++; m.outs += (l.outs||0);
     m.GS += l.st ? 1 : 0;                             // 先發次數
+    if((l.S||0)+(l.B||0) > 0) m.npOuts += (l.outs||0);   // 只累加有登錄用球數的出局數（每局用球分母用）
     m.wER += (l.ER||0) * eraBaseOf(g.level);
     ["H","R","ER","BB","SO","GO","AO","S","B"].forEach(k => m[k]+= (l[k]||0));
   }));
@@ -42,11 +44,13 @@ function finishPit(m){
   // 用球數：S=好球、B=壞球（皆手動輸入），NP 總用球數程式計算、不另存
   m.NP = (m.S||0) + (m.B||0);
   m.SPCT = m.NP ? (m.S||0) / m.NP : NaN;          // 好球率
-  m.PPI = (m.NP && ip) ? m.NP / ip : NaN;          // 每局用球數
+  // 每局用球：分母只用「有登錄用球數那些出賽」的局數，避免混入沒統計用球的舊比賽而偏低
+  const npIp = (m.npOuts||0) / 3;
+  m.PPI = (m.NP && npIp) ? m.NP / npIp : NaN;
   return m;
 }
 function sumPit(map){
-  const t = {outs:0,H:0,R:0,ER:0,BB:0,SO:0,wER:0,GO:0,AO:0,S:0,B:0,GS:0};
+  const t = {outs:0,H:0,R:0,ER:0,BB:0,SO:0,wER:0,GO:0,AO:0,S:0,B:0,GS:0,npOuts:0};
   Object.values(map).forEach(m => Object.keys(t).forEach(k => t[k]+=(m[k]||0)));
   return finishPit(t);
 }
