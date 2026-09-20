@@ -18,8 +18,9 @@ function pitSplitAgg(games, pid){
 function pitchingAgg(games){
   const map = {};
   games.forEach(g => (g.pitching||[]).forEach(l => {
-    const m = map[l.pid] = map[l.pid] || {gp:0,outs:0,H:0,R:0,ER:0,BB:0,SO:0,wER:0,GO:0,AO:0,S:0,B:0};
+    const m = map[l.pid] = map[l.pid] || {gp:0,outs:0,H:0,R:0,ER:0,BB:0,SO:0,wER:0,GO:0,AO:0,S:0,B:0,GS:0};
     m.gp++; m.outs += (l.outs||0);
+    m.GS += l.st ? 1 : 0;                             // 先發次數
     m.wER += (l.ER||0) * eraBaseOf(g.level);
     ["H","R","ER","BB","SO","GO","AO","S","B"].forEach(k => m[k]+= (l[k]||0));
   }));
@@ -45,7 +46,7 @@ function finishPit(m){
   return m;
 }
 function sumPit(map){
-  const t = {outs:0,H:0,R:0,ER:0,BB:0,SO:0,wER:0,GO:0,AO:0,S:0,B:0};
+  const t = {outs:0,H:0,R:0,ER:0,BB:0,SO:0,wER:0,GO:0,AO:0,S:0,B:0,GS:0};
   Object.values(map).forEach(m => Object.keys(t).forEach(k => t[k]+=(m[k]||0)));
   return finishPit(t);
 }

@@ -578,7 +578,7 @@ function buildHighlightPdfHTML(gid){
     <table><tbody><tr><th class="l">球員</th><th>局數</th><th>被安打</th><th>失分</th><th>自責分</th><th>四死</th><th>三振</th><th>用球數(好球/壞球)</th><th>滾地/飛球</th></tr>`;
     g.pitching.forEach(l=>{
       const np = (l.S||0)+(l.B||0);
-      h += `<tr><td class="l">${esc(playerName(l.pid))}</td><td>${ipStr(l.outs)}</td><td>${l.H}</td><td>${l.R}</td><td>${l.ER}</td><td>${l.BB}</td><td>${l.SO}</td><td>${np ? `${np}（${l.S||0}/${l.B||0}）` : "-"}</td><td>${(l.GO||0)}/${(l.AO||0)}</td></tr>`;
+      h += `<tr><td class="l">${esc(playerName(l.pid))}${startBadge(l.st)}</td><td>${ipStr(l.outs)}</td><td>${l.H}</td><td>${l.R}</td><td>${l.ER}</td><td>${l.BB}</td><td>${l.SO}</td><td>${np ? `${np}（${l.S||0}/${l.B||0}）` : "-"}</td><td>${(l.GO||0)}/${(l.AO||0)}</td></tr>`;
     });
     h += `</tbody></table>`;
   }
@@ -902,11 +902,11 @@ function buildScoutReportHTML(){
       .map(p=>({p,m:pAgg[p.id]})).sort((a,b)=>(isFinite(a.m.ERA)?a.m.ERA:1e9)-(isFinite(b.m.ERA)?b.m.ERA:1e9));
     if(pRows.length){
       h += `<div class="rp-sec">${sc?"四":"三"}、我方投手近況</div>
-      <table><tbody><tr><th class="l">球員</th><th>投</th><th>場次</th><th>局數</th><th>被安打</th><th>四死</th><th>三振</th><th>防禦率</th><th>WHIP</th><th>K/9</th><th>滾飛比</th><th>用球數(好球/壞球)</th></tr>`;
+      <table><tbody><tr><th class="l">球員</th><th>投</th><th>場次</th><th>局數</th><th>被安打</th><th>四死</th><th>三振</th><th>防禦率</th><th>WHIP</th><th>K/9</th><th>滾飛比</th><th>用球數(好球/壞球)</th><th>好球率</th></tr>`;
       pRows.forEach(({p,m})=>{
         h += `<tr><td class="l"><b>${esc(p.name)}</b>${p.num?` #${esc(p.num)}`:""}</td><td>${p.throws?p.throws+"投":"—"}</td>
           <td>${m.gp}</td><td>${ipStr(m.outs)}</td><td>${m.H}</td><td>${m.BB}</td><td>${m.SO}</td>
-          <td><b>${m.ERA===Infinity?"INF":f2(m.ERA)}</b></td><td>${f2(m.WHIP)}</td><td>${f2(m.K9)}</td><td>${m.GOAO===Infinity?"全滾":isFinite(m.GOAO)?f2(m.GOAO):"-"}</td><td>${m.NP ? `${m.NP}（${m.S||0}/${m.B||0}）` : "-"}</td></tr>`;
+          <td><b>${m.ERA===Infinity?"INF":f2(m.ERA)}</b></td><td>${f2(m.WHIP)}</td><td>${f2(m.K9)}</td><td>${m.GOAO===Infinity?"全滾":isFinite(m.GOAO)?f2(m.GOAO):"-"}</td><td>${m.NP ? `${m.NP}（${m.S||0}/${m.B||0}）` : "-"}</td><td>${fpct(m.SPCT)}</td></tr>`;
       });
       h += `</tbody></table>
       <p style="color:#999;font-size:10.5px">防禦率依比賽階級局制換算（U12 ${(state.eraBases||{}).U12||6} 局 / U15 ${(state.eraBases||{}).U15||7} 局 / U18 ${(state.eraBases||{}).U18||7} 局 / OB ${(state.eraBases||{}).OB||9} 局）。</p>`;

@@ -42,6 +42,8 @@ function nameLink(pid){
 }
 function lvlBadge(v){ const c = LEVELS.includes(v) ? v : "其他"; return `<span class="lvl-badge lvl-${c}">${esc(v||"U12")}</span>`; }
 function squadBadge(v){ if(!["藍","白","紅"].includes(v)) return ""; return `<span class="squad-badge sq-${v}">${v}隊</span>`; }
+// 先發投手標記（inline style 讓 html2canvas 產 PDF 時也能正確著色）
+function startBadge(st){ return st ? `<span style="background:#fde8e8;color:#c81e1e;border-radius:4px;padding:0 5px;font-size:11px;margin-left:4px;white-space:nowrap">先發</span>` : ""; }
 function handBadge(p){
   if(!p || (!p.throws && !p.bats)) return "";
   const t = p.throws ? p.throws+"投" : "";
@@ -176,7 +178,7 @@ function renderGames(){
     const pitRows = (g.pitching||[]).map((l,i)=>{
       if(editable && editLine && editLine.gid===g.id && editLine.type==="pitching" && editLine.i===i){
         return `<tr class="edit-row">
-          <td class="l">${nameLink(l.pid)}</td>
+          <td class="l">${nameLink(l.pid)}<label style="display:inline-flex;align-items:center;gap:2px;font-size:11px;margin-left:4px"><input type="checkbox" id="epST-${g.id}-${i}" ${l.st?"checked":""}>先發</label></td>
           <td><input value="${ipStr(l.outs)}" id="epIP-${g.id}-${i}" style="width:44px"></td>
           ${["H","R","ER","BB","SO"].map(k=>`<td><input type="number" min="0" value="${l[k]||0}" id="ep${k}-${g.id}-${i}"></td>`).join("")}
           <td style="white-space:nowrap"><input type="number" min="0" value="${l.S||0}" id="epS-${g.id}-${i}" style="width:38px" title="好球">/<input type="number" min="0" value="${l.B||0}" id="epB-${g.id}-${i}" style="width:38px" title="壞球"></td>
@@ -186,7 +188,7 @@ function renderGames(){
           <td style="white-space:nowrap"><button class="btn sm" onclick="saveEditPitLine('${g.id}',${i})">✓存</button> <button class="del" onclick="cancelEditLine()">✕</button></td></tr>`;
       }
       return `<tr>
-      <td class="l">${nameLink(l.pid)}</td><td class="num">${ipStr(l.outs)}</td><td class="num">${l.H}</td>
+      <td class="l">${nameLink(l.pid)}${startBadge(l.st)}</td><td class="num">${ipStr(l.outs)}</td><td class="num">${l.H}</td>
       <td class="num">${l.R}</td><td class="num">${l.ER}${l.erAI?`<button style="cursor:pointer;background:none;border:none;padding:0 2px;font-size:14px" title="點看 AI 判定依據" onclick="showErReason('${g.id}',${i})">🤖</button>`:""}</td><td class="num">${l.BB}</td><td class="num">${l.SO}</td>
       <td class="num">${((l.S||0)+(l.B||0)) ? `${(l.S||0)+(l.B||0)}（${l.S||0}/${l.B||0}）` : "-"}</td>
       <td class="num">${(l.GO||0)}/${(l.AO||0)}</td>
@@ -279,6 +281,7 @@ function renderGames(){
           <div class="fld w60"><label>局數</label><input id="pIP-${g.id}" placeholder="2.1"></div>
           ${["H:被安打","R:失分","ER:自責分","BB:四死","SO:三振","GO:滾地出局","AO:飛球出局","S:好球","B:壞球"].map(x=>{const[k,l]=x.split(":");return `<div class="fld w60"><label>${l}</label><input type="number" min="0" value="0" id="p${k}-${g.id}"></div>`;}).join("")}
           <div class="fld"><label>面對打線</label><select id="pvsB-${g.id}"><option value="">不明</option><option value="R">右打為主</option><option value="L">左打為主</option><option value="M">混合</option></select></div>
+          <div class="fld" style="justify-content:flex-end"><label style="display:inline-flex;align-items:center;gap:4px"><input type="checkbox" id="pST-${g.id}">先發</label></div>
           <button class="btn sm" onclick="addPitLine('${g.id}')">＋ 登錄</button>
           <button class="btn ghost sm" onclick="toggleErPanel('${g.id}')">🤖 AI 判斷自責分</button>
         </div>
@@ -363,7 +366,7 @@ function renderBatting(){
     : `<div class="empty">尚無拆分數據；打擊登錄時選「面對投手」右投/左投即可累積。</div>`;
 }
 const PIT_GETTERS = {
-  name:r=>r.p.name, gp:r=>r.m.gp, outs:r=>r.m.outs, H:r=>r.m.H, R:r=>r.m.R,
+  name:r=>r.p.name, gp:r=>r.m.gp, GS:r=>r.m.GS, outs:r=>r.m.outs, H:r=>r.m.H, R:r=>r.m.R,
   ER:r=>r.m.ER, BB:r=>r.m.BB, SO:r=>r.m.SO, ERA:r=>r.m.ERA, WHIP:r=>r.m.WHIP,
   K9:r=>r.m.K9, BB9:r=>r.m.BB9, GOAO:r=>r.m.GOAO,
   NP:r=>r.m.NP, SPCT:r=>r.m.SPCT, PPI:r=>r.m.PPI
@@ -379,15 +382,15 @@ function renderPitching(){
   const rows = sortRows(base, "pit", PIT_GETTERS);
   const tot = sumPit(agg);
   const html = rows.map(({p,m})=>`<tr><td class="l">${avatarHTML(p)} ${nameLink(p.id)}</td>
-    <td class="num">${m.gp}</td><td class="num">${ipStr(m.outs)}</td><td class="num">${m.H}</td>
+    <td class="num">${m.gp}</td><td class="num">${m.GS||0}</td><td class="num">${ipStr(m.outs)}</td><td class="num">${m.H}</td>
     <td class="num">${m.R}</td><td class="num">${m.ER}</td><td class="num">${m.BB}</td><td class="num">${m.SO}</td>
     <td class="num"><b>${m.ERA===Infinity?"INF":f2(m.ERA)}</b></td><td class="num">${f2(m.WHIP)}</td>
     <td class="num">${f2(m.K9)}</td><td class="num">${f2(m.BB9)}</td>
     <td class="num">${m.GOAO===Infinity?"全滾地":f2(m.GOAO)}</td>
     <td class="num">${m.NP||"-"}</td><td class="num">${fpct(m.SPCT)}</td><td class="num">${f2(m.PPI)}</td></tr>`).join("");
   document.getElementById("pitTable").innerHTML = `<div class="tblwrap"><table>
-    <thead><tr>${th_("pit","name","球員","l")}${th_("pit","gp","場次")}${th_("pit","outs","局數")}${th_("pit","H","被安打")}${th_("pit","R","失分")}${th_("pit","ER","自責分")}${th_("pit","BB","四死")}${th_("pit","SO","三振")}${th_("pit","ERA","防禦率")}${th_("pit","WHIP","WHIP")}${th_("pit","K9","K/9")}${th_("pit","BB9","BB/9")}${th_("pit","GOAO","滾飛比")}${th_("pit","NP","用球數")}${th_("pit","SPCT","好球率")}${th_("pit","PPI","每局用球")}</tr></thead>
-    <tbody>${html}<tr class="total"><td class="l">球隊合計</td><td class="num">${games.length}</td><td class="num">${ipStr(tot.outs)}</td><td class="num">${tot.H}</td><td class="num">${tot.R}</td><td class="num">${tot.ER}</td><td class="num">${tot.BB}</td><td class="num">${tot.SO}</td><td class="num">${f2(tot.ERA)}</td><td class="num">${f2(tot.WHIP)}</td><td class="num">${f2(tot.K9)}</td><td class="num">${f2(tot.BB9)}</td><td class="num">${tot.GOAO===Infinity?"全滾地":f2(tot.GOAO)}</td><td class="num">${tot.NP||"-"}</td><td class="num">${fpct(tot.SPCT)}</td><td class="num">-</td></tr></tbody></table></div>
+    <thead><tr>${th_("pit","name","球員","l")}${th_("pit","gp","場次")}${th_("pit","GS","先發")}${th_("pit","outs","局數")}${th_("pit","H","被安打")}${th_("pit","R","失分")}${th_("pit","ER","自責分")}${th_("pit","BB","四死")}${th_("pit","SO","三振")}${th_("pit","ERA","防禦率")}${th_("pit","WHIP","WHIP")}${th_("pit","K9","K/9")}${th_("pit","BB9","BB/9")}${th_("pit","GOAO","滾飛比")}${th_("pit","NP","用球數")}${th_("pit","SPCT","好球率")}${th_("pit","PPI","每局用球")}</tr></thead>
+    <tbody>${html}<tr class="total"><td class="l">球隊合計</td><td class="num">${games.length}</td><td class="num">${tot.GS||0}</td><td class="num">${ipStr(tot.outs)}</td><td class="num">${tot.H}</td><td class="num">${tot.R}</td><td class="num">${tot.ER}</td><td class="num">${tot.BB}</td><td class="num">${tot.SO}</td><td class="num">${f2(tot.ERA)}</td><td class="num">${f2(tot.WHIP)}</td><td class="num">${f2(tot.K9)}</td><td class="num">${f2(tot.BB9)}</td><td class="num">${tot.GOAO===Infinity?"全滾地":f2(tot.GOAO)}</td><td class="num">${tot.NP||"-"}</td><td class="num">${fpct(tot.SPCT)}</td><td class="num">-</td></tr></tbody></table></div>
     <div class="hint">防禦率依各場比賽的階級局制換算（U12 ${ (state.eraBases||{}).U12||6 } 局、U15 ${ (state.eraBases||{}).U15||7 } 局、U18 ${ (state.eraBases||{}).U18||7 } 局、OB ${ (state.eraBases||{}).OB||9 } 局、其他 ${ (state.eraBases||{})["其他"]||9 } 局）；K/9、BB/9 固定以每 9 局換算；滾飛比＝滾地出局 ÷ 飛球出局，越高代表越會製造滾地球；用球數＝好球＋壞球，好球率＝好球 ÷ 用球數，每局用球＝用球數 ÷ 局數（僅列個別投手，未登錄好壞球者顯示 -）。</div>`;
 }
 
@@ -424,6 +427,7 @@ function openProfile(pid){
   const pitCards = pit ? `
     <div class="cards">
       <div class="card"><div class="v">${pit.gp}</div><div class="k">投球出賽</div></div>
+      <div class="card"><div class="v">${pit.GS||0}</div><div class="k">先發次數</div></div>
       <div class="card"><div class="v">${ipStr(pit.outs)}</div><div class="k">投球局數</div></div>
       <div class="card"><div class="v">${pit.ERA===Infinity?"INF":f2(pit.ERA)}</div><div class="k">防禦率</div></div>
       <div class="card"><div class="v">${f2(pit.WHIP)}</div><div class="k">WHIP</div></div>

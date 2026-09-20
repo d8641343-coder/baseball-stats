@@ -1,5 +1,5 @@
 /* ───────── 版本(每次發布前更新此處) ───────── */
-const APP_VERSION = "v1.13.2 · 2026-09-20";
+const APP_VERSION = "v1.14.0 · 2026-09-20";
 
 /* ───────── 階級與 ERA 局制基準(單一來源，新增/調整階級改這裡) ───────── */
 const LEVELS = ["U12","U15","U18","OB","其他"];
@@ -319,7 +319,7 @@ function addPitLine(gid){
   if(!pid) return toast("請先選擇球員");
   const outs = parseIP(document.getElementById("pIP-"+gid).value);
   if(outs===null) return toast("局數格式錯誤，例：2、2.1、2.2");
-  const line = {pid, outs, vsB: document.getElementById("pvsB-"+gid).value};
+  const line = {pid, outs, vsB: document.getElementById("pvsB-"+gid).value, st: document.getElementById("pST-"+gid).checked};
   ["H","R","ER","BB","SO","GO","AO","S","B"].forEach(k => line[k] = Math.max(0, Number(document.getElementById("p"+k+"-"+gid).value)||0));
   if(line.ER > line.R) return toast("自責分不可大於失分");
   const pend = pendingErAI[gid];
@@ -357,7 +357,7 @@ function saveEditPitLine(gid, i){
   const cur = (g.pitching||[])[i]; if(!cur) return;
   const outs = parseIP(document.getElementById(`epIP-${gid}-${i}`).value);
   if(outs===null) return toast("局數格式錯誤，例：2、2.1、2.2");
-  const line = {pid:cur.pid, outs, vsB:document.getElementById(`epvsB-${gid}-${i}`).value};
+  const line = {pid:cur.pid, outs, vsB:document.getElementById(`epvsB-${gid}-${i}`).value, st: document.getElementById(`epST-${gid}-${i}`).checked};
   ["H","R","ER","BB","SO","GO","AO","S","B"].forEach(k => line[k] = Math.max(0, Number(document.getElementById(`ep${k}-${gid}-${i}`).value)||0));
   if(line.ER > line.R) return toast("自責分不可大於失分");
   if(cur.erAI && line.ER === cur.ER) line.erAI = cur.erAI;   // ER 數字未變，AI 判定依據仍然有效
