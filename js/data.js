@@ -1,5 +1,5 @@
 /* ───────── 版本(每次發布前更新此處) ───────── */
-const APP_VERSION = "v1.14.0 · 2026-09-20";
+const APP_VERSION = "v1.14.1 · 2026-09-20";
 
 /* ───────── 階級與 ERA 局制基準(單一來源，新增/調整階級改這裡) ───────── */
 const LEVELS = ["U12","U15","U18","OB","其他"];
@@ -429,9 +429,11 @@ function setEraBaseLvl(level, v){
 const IMP_FORMATS = {
   roster: "欄位順序：姓名, 背號, 守位, 階級(U12/U15/U18/OB/其他), 投(右/左), 打(右/左/兩), 大頭照網址\n範例：王小明, 12, SS, U12, 右, 左, https://.../photo.jpg（投打與照片可留空）",
   batting: "欄位順序：日期, 對手, 姓名, 打數, 安打, 二安, 三安, 全壘打, 四死, 犧飛, 得分, 打點, 三振, 盜壘, 面對投手(右/左/混)\n範例：2026-07-05, 向上, 王小明, 4, 2, 1, 0, 0, 1, 0, 1, 2, 0, 1, 右（日期後欄位可留空，視為 0 或不明）",
-  pitching: "欄位順序：日期, 對手, 姓名, 局數(2.1=2又1/3), 被安打, 失分, 自責分, 四死, 三振, 面對打線(右/左/混), 滾地出局, 飛球出局, 好球, 壞球\n範例：2026-07-05, 向上, 王小明, 3.2, 4, 2, 1, 3, 5, 右, 6, 3, 38, 19（後面欄位可留空）"
+  pitching: "欄位順序：日期, 對手, 姓名, 局數(2.1=2又1/3), 被安打, 失分, 自責分, 四死, 三振, 面對打線(右/左/混), 滾地出局, 飛球出局, 好球, 壞球, 先發(填「先發」為先發，留空為非先發)\n範例：2026-07-05, 向上, 王小明, 3.2, 4, 2, 1, 3, 5, 右, 6, 3, 38, 19, 先發（後面欄位可留空）"
 };
 const HAND_MAP = {"右":"R","左":"L","混":"M","混合":"M"};
+// CSV 匯入「先發」欄：接受常見的是/勾選寫法，其餘（含空白、0、否）視為非先發
+const isStarterCell = v => /^(先發|先|是|y|yes|true|t|v|o|✓|1)$/i.test(String(v||"").trim());
 /* 伏せ字マッチ：吳O淏 之類（中間字被網站遮成 O/○/〇/＊/* 等）對映到既有球員 吳丞淏。
    逐字比對，遮罩字元視為萬用字（任意一字）；唯一命中才回傳，否則回傳 null。 */
 const MASK_CHARS = /[Oo0Ｏｏ０○〇◯●＊*✕✖×Xx]/;
@@ -500,7 +502,7 @@ function runImport(){
         const g = findOrCreateGame(date, opp, level);
         const v = k => Math.max(0, parseInt(n[k])||0);
         g.pitching.push({pid:p.id, outs, H:v(0),R:v(1),ER:v(2),BB:v(3),SO:v(4),
-          vsB: HAND_MAP[(n[5]||"").trim()]||"", GO:v(6), AO:v(7), S:v(8), B:v(9)}); ok++;
+          vsB: HAND_MAP[(n[5]||"").trim()]||"", GO:v(6), AO:v(7), S:v(8), B:v(9), st:isStarterCell(n[10])}); ok++;
       }
     }catch(err){ skip.push(`第 ${idx+1} 行：${err}`); }
   });
@@ -538,8 +540,8 @@ function exportImpTemplate(){
   }else{
     const roster = csvRosterByLevel(level);
     if(!roster.length){ toast(`目前沒有 ${level} 階級的球員名單，請先建立名單`); return; }
-    header = ["日期","對手","姓名","局數(2.1=2又1/3)","被安打","失分","自責分","四死","三振","面對打線(右/左/混)","滾地出局","飛球出局","好球","壞球"];
-    rows = roster.map(p=>[today,"",p.name,"","","","","","","","","","",""]);
+    header = ["日期","對手","姓名","局數(2.1=2又1/3)","被安打","失分","自責分","四死","三振","面對打線(右/左/混)","滾地出局","飛球出局","好球","壞球","先發(先發/留空)"];
+    rows = roster.map(p=>[today,"",p.name,"","","","","","","","","","","",""]);
   }
   const csv = "﻿" + [header, ...rows].map(r=>r.map(csvCell).join(",")).join("\r\n");
   const blob = new Blob([csv], {type:"text/csv;charset=utf-8"});
