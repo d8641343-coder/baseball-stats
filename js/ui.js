@@ -178,7 +178,7 @@ function renderGames(){
     const pitRows = (g.pitching||[]).map((l,i)=>{
       if(editable && editLine && editLine.gid===g.id && editLine.type==="pitching" && editLine.i===i){
         return `<tr class="edit-row">
-          <td class="l">${nameLink(l.pid)}<label style="display:inline-flex;align-items:center;gap:2px;font-size:11px;margin-left:4px"><input type="checkbox" id="epST-${g.id}-${i}" ${l.st?"checked":""}>先發</label></td>
+          <td class="l">${nameLink(l.pid)}<label style="display:inline-flex;align-items:center;gap:2px;font-size:11px;margin-left:4px"><input type="checkbox" id="epST-${g.id}-${i}" ${lineIsStarter(g,i)?"checked":""}>先發</label></td>
           <td><input value="${ipStr(l.outs)}" id="epIP-${g.id}-${i}" style="width:44px"></td>
           ${["H","R","ER","BB","SO"].map(k=>`<td><input type="number" min="0" value="${l[k]||0}" id="ep${k}-${g.id}-${i}"></td>`).join("")}
           <td style="white-space:nowrap"><input type="number" min="0" value="${l.S||0}" id="epS-${g.id}-${i}" style="width:38px" title="好球">/<input type="number" min="0" value="${l.B||0}" id="epB-${g.id}-${i}" style="width:38px" title="壞球"></td>
@@ -188,7 +188,7 @@ function renderGames(){
           <td style="white-space:nowrap"><button class="btn sm" onclick="saveEditPitLine('${g.id}',${i})">✓存</button> <button class="del" onclick="cancelEditLine()">✕</button></td></tr>`;
       }
       return `<tr>
-      <td class="l">${nameLink(l.pid)}${startBadge(l.st)}</td><td class="num">${ipStr(l.outs)}</td><td class="num">${l.H}</td>
+      <td class="l">${nameLink(l.pid)}${startBadge(lineIsStarter(g,i))}</td><td class="num">${ipStr(l.outs)}</td><td class="num">${l.H}</td>
       <td class="num">${l.R}</td><td class="num">${l.ER}${l.erAI?`<button style="cursor:pointer;background:none;border:none;padding:0 2px;font-size:14px" title="點看 AI 判定依據" onclick="showErReason('${g.id}',${i})">🤖</button>`:""}</td><td class="num">${l.BB}</td><td class="num">${l.SO}</td>
       <td class="num">${((l.S||0)+(l.B||0)) ? `${(l.S||0)+(l.B||0)}（${l.S||0}/${l.B||0}）` : "-"}</td>
       <td class="num">${(l.GO||0)}/${(l.AO||0)}</td>

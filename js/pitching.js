@@ -18,16 +18,24 @@ function pitSplitAgg(games, pid){
 /* ───────── 統計計算 ───────── */
 function pitchingAgg(games){
   const map = {};
-  games.forEach(g => (g.pitching||[]).forEach(l => {
+  games.forEach(g => (g.pitching||[]).forEach((l,i) => {
     const m = map[l.pid] = map[l.pid] || {gp:0,outs:0,H:0,R:0,ER:0,BB:0,SO:0,wER:0,GO:0,AO:0,S:0,B:0,GS:0,npOuts:0};
     m.gp++; m.outs += (l.outs||0);
-    m.GS += l.st ? 1 : 0;                             // 先發次數
+    m.GS += lineIsStarter(g, i) ? 1 : 0;                  // 先發次數
     if((l.S||0)+(l.B||0) > 0) m.npOuts += (l.outs||0);   // 只累加有登錄用球數的出局數（每局用球分母用）
     m.wER += (l.ER||0) * eraBaseOf(g.level);
     ["H","R","ER","BB","SO","GO","AO","S","B"].forEach(k => m[k]+= (l[k]||0));
   }));
   Object.values(map).forEach(m => finishPit(m));
   return map;
+}
+// 先發判定：有 st 欄位（布林）就照登錄；舊紀錄沒有此欄位時回溯推定——該場第一位登錄的投手為先發
+// （若同場已有別人明確勾先發，就不再推定）
+function lineIsStarter(g, i){
+  const list = g.pitching || [], l = list[i];
+  if(!l) return false;
+  if(typeof l.st === "boolean") return l.st;
+  return i === 0 && !list.some(x => x.st === true);
 }
 function eraBaseOf(level){
   const b = state.eraBases || {...ERA_BASE_DEFAULT};

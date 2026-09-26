@@ -576,9 +576,9 @@ function buildHighlightPdfHTML(gid){
   if((g.pitching||[]).length){
     h += `<div class="rp-sec">投球登錄</div>
     <table><tbody><tr><th class="l">球員</th><th>局數</th><th>被安打</th><th>失分</th><th>自責分</th><th>四死</th><th>三振</th><th>用球數(好球/壞球)</th><th>滾地/飛球</th></tr>`;
-    g.pitching.forEach(l=>{
+    g.pitching.forEach((l,i)=>{
       const np = (l.S||0)+(l.B||0);
-      h += `<tr><td class="l">${esc(playerName(l.pid))}${startBadge(l.st)}</td><td>${ipStr(l.outs)}</td><td>${l.H}</td><td>${l.R}</td><td>${l.ER}</td><td>${l.BB}</td><td>${l.SO}</td><td>${np ? `${np}（${l.S||0}/${l.B||0}）` : "-"}</td><td>${(l.GO||0)}/${(l.AO||0)}</td></tr>`;
+      h += `<tr><td class="l">${esc(playerName(l.pid))}${startBadge(lineIsStarter(g,i))}</td><td>${ipStr(l.outs)}</td><td>${l.H}</td><td>${l.R}</td><td>${l.ER}</td><td>${l.BB}</td><td>${l.SO}</td><td>${np ? `${np}（${l.S||0}/${l.B||0}）` : "-"}</td><td>${(l.GO||0)}/${(l.AO||0)}</td></tr>`;
     });
     h += `</tbody></table>`;
   }
@@ -604,18 +604,7 @@ async function downloadHighlightPDF(gid){
     const canvas = await html2canvas(stage, {scale:2, backgroundColor:"#ffffff", logging:false});
     const { jsPDF } = window.jspdf;
     const pdf = new jsPDF({unit:"mm", format:"a4", orientation:"portrait"});
-    const pageW = 210, pageH = 297;
-    const pxPerPage = canvas.width * pageH / pageW;
-    let rendered = 0, page = 0;
-    while(rendered < canvas.height){
-      const sliceH = Math.min(pxPerPage, canvas.height - rendered);
-      const slice = document.createElement("canvas");
-      slice.width = canvas.width; slice.height = sliceH;
-      slice.getContext("2d").drawImage(canvas, 0, rendered, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
-      if(page > 0) pdf.addPage();
-      pdf.addImage(slice.toDataURL("image/jpeg", 0.92), "JPEG", 0, 0, pageW, sliceH * pageW / canvas.width);
-      rendered += sliceH; page++;
-    }
+    addCanvasPages(pdf, canvas, stage);
     pdf.save(`${state.teamName}_賽後焦點_${g.date}.pdf`);
     stage.innerHTML = "";
     toast("PDF 已下載");
@@ -848,6 +837,9 @@ function buildScoutReportHTML(){
   const bAgg = battingAgg(games), pAgg = pitchingAgg(games);
   const tb = sumBat(bAgg), tp = sumPit(pAgg);
   const form = games.map(g=>gameResult(g)==="W"?"勝":gameResult(g)==="L"?"敗":"和").join(" ");
+  // 章節動態編號：依實際輸出的章節依序給號（含/不含對手情蒐、無打者/投手資料時都不會跳號）
+  let secNo = 0;
+  const secNum = () => "一二三四五六七八九十"[secNo++] + "、";
 
   let h = `<div class="rp-page">
     <div class="rp-head">
@@ -858,7 +850,7 @@ function buildScoutReportHTML(){
     </div>`;
 
   if(sc){
-    h += `<div class="rp-sec">一、對手情蒐${sc.source==="manual"?"（教練觀察）":"（AI 整理，請自行核對）"}</div>`;
+    h += `<div class="rp-sec">${secNum()}對手情蒐${sc.source==="manual"?"（教練觀察）":"（AI 整理，請自行核對）"}</div>`;
     if(sc.summary) h += `<p><b>整體觀察：</b>${esc(sc.summary)}</p>`;
     if((sc.keyPlayers||[]).length){
       h += `<table><tbody><tr><th class="l">指標人物</th><th>角色</th><th>左右</th><th class="l">留意說明</th></tr>`;
@@ -871,7 +863,7 @@ function buildScoutReportHTML(){
     if(sc.sources) h += `<p style="color:#999;font-size:10.5px">來源：${esc(sc.sources)}</p>`;
   }
 
-  h += `<div class="rp-sec">${sc?"二":"一"}、我方球隊近況（${winTxt}）</div>`;
+  h += `<div class="rp-sec">${secNum()}我方球隊近況（${winTxt}）</div>`;
   if(!games.length){
     h += `<p>此範圍尚無比賽資料。</p>`;
   }else{
@@ -888,7 +880,7 @@ function buildScoutReportHTML(){
     const bRows = state.players.filter(p=>bAgg[p.id] && bAgg[p.id].PA>0)
       .map(p=>({p,m:bAgg[p.id]})).sort((a,b)=>(b.m.OPS||0)-(a.m.OPS||0));
     if(bRows.length){
-      h += `<div class="rp-sec">${sc?"三":"二"}、我方打者近況</div>
+      h += `<div class="rp-sec">${secNum()}我方打者近況</div>
       <table><tbody><tr><th class="l">球員</th><th>投打</th><th>場次</th><th>打數</th><th>安打</th><th>全壘打</th><th>四死</th><th>打點</th><th>三振</th><th>盜壘</th><th>打擊率</th><th>上壘率</th><th>長打率</th><th>OPS</th></tr>`;
       bRows.forEach(({p,m})=>{
         const hand = (p.throws?p.throws+"投":"") + (p.bats?(p.bats==="兩"?"左右":p.bats)+"打":"") || "—";
@@ -901,7 +893,7 @@ function buildScoutReportHTML(){
     const pRows = state.players.filter(p=>pAgg[p.id] && pAgg[p.id].outs>0)
       .map(p=>({p,m:pAgg[p.id]})).sort((a,b)=>(isFinite(a.m.ERA)?a.m.ERA:1e9)-(isFinite(b.m.ERA)?b.m.ERA:1e9));
     if(pRows.length){
-      h += `<div class="rp-sec">${sc?"四":"三"}、我方投手近況</div>
+      h += `<div class="rp-sec">${secNum()}我方投手近況</div>
       <table><tbody><tr><th class="l">球員</th><th>投</th><th>場次</th><th>局數</th><th>被安打</th><th>四死</th><th>三振</th><th>防禦率</th><th>WHIP</th><th>K/9</th><th>滾飛比</th><th>用球數(好球/壞球)</th><th>好球率</th></tr>`;
       pRows.forEach(({p,m})=>{
         h += `<tr><td class="l"><b>${esc(p.name)}</b>${p.num?` #${esc(p.num)}`:""}</td><td>${p.throws?p.throws+"投":"—"}</td>
@@ -910,12 +902,101 @@ function buildScoutReportHTML(){
       });
       h += `</tbody></table>
       <p style="color:#999;font-size:10.5px">防禦率依比賽階級局制換算（U12 ${(state.eraBases||{}).U12||6} 局 / U15 ${(state.eraBases||{}).U15||7} 局 / U18 ${(state.eraBases||{}).U18||7} 局 / OB ${(state.eraBases||{}).OB||9} 局）。</p>`;
+      h += pitcherGameLogHTML(games, pRows.map(r=>r.p), secNum());
     }
   }
 
   if(note) h += `<div class="rp-sec">教練註記</div><div class="rp-note">${esc(note)}</div>`;
   h += `<div class="rp-foot"><span>親子勇士 WARRIORS · 攻守數據中心</span><span>本報告數據僅供隊內參考</span></div></div>`;
   return h;
+}
+// 我方投手逐場明細：依彙總表的投手順序分組，每位投手的場次由新到舊（同日依建立順序反序）
+function pitcherGameLogHTML(games, pitchers, secLabel){
+  const dash = v => (v === undefined || v === null || v === "" || (typeof v === "number" && !isFinite(v))) ? "-" : v;
+  // 每位投手的區塊前都重複一次表頭（第一格放投手姓名，跨頁補畫表頭時也看得出是誰），列數多時不用回頭找欄位名稱；同一張表內重複，欄寬才會對齊
+  const head = p => `<tr><th class="l">${esc(p.name)}${p.num?` #${esc(p.num)}`:""}</th><th>日期</th><th class="l">對手</th><th>先發</th><th>局數</th><th>被安打</th><th>自責分</th><th>防禦率</th><th>四死</th><th>三振</th><th>滾飛比</th><th>用球數(好球/壞球)</th></tr>`;
+  const byNew = [...games].sort((a,b)=> b.date.localeCompare(a.date) || (b.created||0)-(a.created||0));
+  let rows = "";
+  pitchers.forEach(p=>{
+    const apps = [];
+    byNew.forEach(g=>(g.pitching||[]).forEach((l,i)=>{ if(l.pid===p.id) apps.push({g,l,i}); }));
+    if(!apps.length) return;
+    if(rows) rows += `<tr><td colspan="12" style="border:none;padding:0;height:10px"></td></tr>`;   // 投手之間留白
+    rows += head(p);
+    apps.forEach(({g,l,i})=>{
+      const outs = l.outs||0, er = l.ER, np = (l.S||0)+(l.B||0);
+      const era = typeof er !== "number" ? "-" : outs ? f2(er*eraBaseOf(g.level)*3/outs) : (er>0 ? "INF" : "-");
+      const go = l.GO||0, ao = l.AO||0;
+      const goao = ao ? f2(go/ao) : go ? "全滾" : "-";
+      rows += `<tr>
+        <td class="l"></td>
+        <td>${esc(g.date.replace(/-/g,"/"))}</td><td class="l">${esc(g.opp)}</td><td>${lineIsStarter(g,i)?startBadge(true):""}</td>
+        <td>${ipStr(outs)}</td><td>${dash(l.H)}</td><td>${dash(er)}</td><td>${era}</td><td>${dash(l.BB)}</td><td>${dash(l.SO)}</td>
+        <td>${goao}</td><td>${np ? `${np}（${l.S||0}/${l.B||0}）` : "-"}</td></tr>`;
+    });
+  });
+  if(!rows) return "";
+  return `<div class="rp-sec">${secLabel}我方投手逐場明細</div>
+    <table><tbody>${rows}</tbody></table>
+    <p style="color:#999;font-size:10.5px">單場防禦率依該場階級局制換算；滾飛比＝滾地出局 ÷ 飛球出局。</p>`;
+}
+
+// 把 html2canvas 畫好的整張長圖切成 A4 頁：切點避開表格列、段落、卡片中間，
+// 章節標題與表頭列會和下一列黏在一起，不會單獨落在頁尾
+function addCanvasPages(pdf, canvas, stage){
+  const pageW = 210, pageH = 297, marginTop = 10, marginBottom = 10;   // mm；第 2 頁起加上邊界
+  const ratio = canvas.width / stage.offsetWidth;                      // 畫布 px / CSS px
+  const pxPerMm = canvas.width / pageW;
+  const base = stage.getBoundingClientRect().top;
+  const blocks = [];                                                   // [top, bottom]（CSS px）不可切斷的區塊
+  const box = el => { const r = el.getBoundingClientRect(); return [r.top - base, r.bottom - base]; };
+  // 表頭列（含 th 的 tr）與所屬表格底部：換頁落在表格中間時，新頁頂端補畫最近的表頭
+  const heads = [...stage.querySelectorAll("tr")].filter(tr=>tr.querySelector("th")).map(tr=>{
+    const [t, b] = box(tr);
+    return {t: t * ratio, b: b * ratio, tableB: box(tr.closest("table"))[1] * ratio};
+  });
+  stage.querySelectorAll("tr, .rp-head, .rp-cards, .rp-note, .rp-foot, .rp-page > p, .rp-page > div > p, .rp-sec, img").forEach(el=>{
+    let [t, b] = box(el);
+    if(el.matches(".rp-sec")){                                         // 標題黏住後面：表格則黏到第一筆資料列
+      const nx = el.nextElementSibling;
+      if(nx){ const rows = nx.querySelectorAll ? nx.querySelectorAll("tr") : [];
+        b = Math.max(b, (rows.length > 1 ? box(rows[1]) : box(nx))[1]); }
+    }else if(el.matches("tr") && el.querySelector("th") && el.nextElementSibling){
+      b = Math.max(b, box(el.nextElementSibling)[1]);                  // 表頭列黏住第一筆資料
+    }
+    blocks.push([t * ratio, b * ratio]);
+  });
+  let y = 0, page = 0;
+  while(y < canvas.height - 1){
+    const top = page ? marginTop : 0;
+    // 本頁若從表格中段開始（且第一列不是表頭本身），取該段最近的表頭列在頂端重畫
+    const rep = page ? heads.filter(h => h.b <= y + 1 && h.tableB > y + 1).pop() : null;
+    const repH = (rep && !heads.some(h => Math.abs(h.t - y) < 2)) ? Math.round(rep.b - rep.t) : 0;
+    const avail = (pageH - top - marginBottom) * pxPerMm - repH;
+    let cut = Math.min(y + avail, canvas.height);
+    if(cut < canvas.height){
+      // 找出跨越切點的區塊，把切點往上提到它們的頂端（區塊本身比一頁還高時才硬切）
+      let moved = true;
+      while(moved){
+        moved = false;
+        for(const [t, b] of blocks){
+          if(t < cut - 0.5 && b > cut + 0.5 && t > y + 1){ cut = t; moved = true; }
+        }
+      }
+      if(cut <= y + 1) cut = Math.min(y + avail, canvas.height);
+    }
+    const sliceH = Math.ceil(cut - y);
+    const slice = document.createElement("canvas");
+    slice.width = canvas.width; slice.height = sliceH + repH;
+    const ctx = slice.getContext("2d");
+    ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, slice.width, slice.height);
+    if(repH) ctx.drawImage(canvas, 0, Math.round(rep.t), canvas.width, repH, 0, 0, canvas.width, repH);
+    ctx.drawImage(canvas, 0, y, canvas.width, sliceH, 0, repH, canvas.width, sliceH);
+    if(page > 0) pdf.addPage();
+    pdf.addImage(slice.toDataURL("image/jpeg", 0.92), "JPEG", 0, top, pageW, slice.height / pxPerMm);
+    y += sliceH; page++;
+  }
+  return page;
 }
 function previewScoutPDF(){
   const box = document.getElementById("rpPreview");
@@ -936,19 +1017,7 @@ async function downloadScoutPDF(){
     const canvas = await html2canvas(stage, {scale:2, backgroundColor:"#ffffff", logging:false});
     const { jsPDF } = window.jspdf;
     const pdf = new jsPDF({unit:"mm", format:"a4", orientation:"portrait"});
-    const pageW = 210, pageH = 297;
-    const imgH = canvas.height * pageW / canvas.width;
-    const pxPerPage = canvas.width * pageH / pageW;   // 每頁對應的原始畫布高度
-    let rendered = 0, page = 0;
-    while(rendered < canvas.height){
-      const sliceH = Math.min(pxPerPage, canvas.height - rendered);
-      const slice = document.createElement("canvas");
-      slice.width = canvas.width; slice.height = sliceH;
-      slice.getContext("2d").drawImage(canvas, 0, rendered, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
-      if(page > 0) pdf.addPage();
-      pdf.addImage(slice.toDataURL("image/jpeg", 0.92), "JPEG", 0, 0, pageW, sliceH * pageW / canvas.width);
-      rendered += sliceH; page++;
-    }
+    addCanvasPages(pdf, canvas, stage);
     const scSel = document.getElementById("rpScout");
     const oppName = scSel.value ? (state.scouts.find(s=>s.id===scSel.value)||{}).opp : "";
     pdf.save(`親子勇士球探報告${oppName?"-vs"+oppName:""}-${new Date().toISOString().slice(0,10)}.pdf`);
