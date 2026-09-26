@@ -8,7 +8,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
-<link rel="stylesheet" href="css/style.css?v=1.16.0">
+<link rel="stylesheet" href="css/style.css?v=1.17.0">
 </head>
 <body>
 
@@ -59,7 +59,14 @@
   </div>
   <b>賽事：</b>
   <select id="tourSel" onchange="setTourFilter(this.value)"><option value="all">全部賽事</option></select>
-  <span class="hint">切換後，各頁統計只計入所選階級與賽事的比賽與球員。</span>
+  <b>分隊：</b>
+  <div class="chips" style="margin:0" id="squadChips">
+    <button class="chip active" data-squad="all">全部分隊</button>
+    <button class="chip" data-squad="藍">藍隊</button>
+    <button class="chip" data-squad="白">白隊</button>
+    <button class="chip" data-squad="紅">紅隊</button>
+  </div>
+  <span class="hint">切換後，各頁統計只計入所選階級、賽事與分隊的比賽與球員。</span>
 </div></div>
 
 <main>
@@ -72,12 +79,6 @@
     <button class="chip" data-win="1m">近一個月</button>
     <button class="chip" data-win="5">近 5 場</button>
     <button class="chip" data-win="3">近 3 場</button>
-  </div>
-  <div class="chips" id="ovSquadChips" style="margin-top:6px">
-    <button class="chip active" data-squad="all">全部分隊</button>
-    <button class="chip" data-squad="藍">藍隊</button>
-    <button class="chip" data-squad="白">白隊</button>
-    <button class="chip" data-squad="紅">紅隊</button>
   </div>
   <div id="ovCards" class="cards"></div>
   <div id="ovForm"></div>
@@ -400,13 +401,13 @@
 <div id="pdfStage" style="position:absolute;left:-10000px;top:0;width:794px;background:#fff"></div>
 <div class="toast" id="toast"></div>
 
-<script src="js/firebase-config.js?v=1.16.0"></script>
-<script src="js/data.js?v=1.16.0"></script>
-<script src="js/auth.js?v=1.16.0"></script>
-<script src="js/batting.js?v=1.16.0"></script>
-<script src="js/pitching.js?v=1.16.0"></script>
-<script src="js/fielding.js?v=1.16.0"></script>
-<script src="js/scout.js?v=1.16.0"></script>
-<script src="js/ui.js?v=1.16.0"></script>
+<script src="js/firebase-config.js?v=1.17.0"></script>
+<script src="js/data.js?v=1.17.0"></script>
+<script src="js/auth.js?v=1.17.0"></script>
+<script src="js/batting.js?v=1.17.0"></script>
+<script src="js/pitching.js?v=1.17.0"></script>
+<script src="js/fielding.js?v=1.17.0"></script>
+<script src="js/scout.js?v=1.17.0"></script>
+<script src="js/ui.js?v=1.17.0"></script>
 </body>
 </html>

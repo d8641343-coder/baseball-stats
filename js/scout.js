@@ -624,8 +624,8 @@ async function aiPickMVP(){
   }else if(scope==="tour"){
     period = document.getElementById("aiTour").value;
     if(!period) return toast("請選擇賽事名稱");
-    // 依賽事名稱評選，不受頂部賽事篩選影響（僅套用目前階級）
-    games = sortedGames().filter(g=> (lvl==="all"||(g.level||"U12")===lvl) && (g.tour||"").trim()===period);
+    // 依賽事名稱評選，不受頂部賽事篩選影響（僅套用目前階級與分隊）
+    games = sortedGames().filter(g=> (lvl==="all"||(g.level||"U12")===lvl) && (squadFilter==="all"||(g.squad||"")===squadFilter) && (g.tour||"").trim()===period);
   }else{
     period = String(document.getElementById("aiYear").value||"").trim();
     if(!/^\d{4}$/.test(period)) return toast("請輸入年度，例：2026");
@@ -805,9 +805,9 @@ function renderReportOptions(){
   if(!sel) return;
   const cur = sel.value;
   sel.innerHTML = `<option value="">（不含對手情蒐）</option>` +
-    (state.scouts||[]).slice().reverse().map(s=>
+    visibleScouts().slice().reverse().map(s=>
       `<option value="${s.id}">${esc(s.opp)}（${new Date(s.created).toLocaleDateString("zh-TW")}）</option>`).join("");
-  if(cur) sel.value = cur;
+  if(cur && [...sel.options].some(o=>o.value===cur)) sel.value = cur;
 }
 function loadScript(src){
   return new Promise(res=>{ const s=document.createElement("script"); s.src=src; s.onload=res; s.onerror=res; document.head.appendChild(s); });
@@ -828,6 +828,7 @@ function buildScoutReportHTML(){
   const winTxt = w==="all" ? "全部賽事" : w==="1m" ? "近一個月" : "近 " + w + " 場";
   const lvlTxt = lvl==="all" ? "全隊" : lvl;
   const tourTxt = tourFilter==="all" ? "" : tourFilter;   // 頂部選取的賽事名稱，全部時不顯示
+  const squadTxt = squadFilter==="all" ? "" : squadFilter+"隊";
   const logo = document.querySelector(".sb-logo") ? document.querySelector(".sb-logo").src : "";
 
   const wn = games.filter(g=>gameResult(g)==="W").length;
@@ -845,7 +846,7 @@ function buildScoutReportHTML(){
     <div class="rp-head">
       ${logo?`<img src="${logo}" alt="">`:""}
       <div><h1>親子勇士 球探報告</h1>
-        <div class="sub">SCOUTING REPORT · ${lvlTxt}${tourTxt?" · "+esc(tourTxt):""} · 產生日期 ${new Date().toLocaleDateString("zh-TW")}</div></div>
+        <div class="sub">SCOUTING REPORT · ${lvlTxt}${tourTxt?" · "+esc(tourTxt):""}${squadTxt?" · "+squadTxt:""} · 產生日期 ${new Date().toLocaleDateString("zh-TW")}</div></div>
       ${sc?`<div class="rp-vs">對戰對手<br><b>${esc(sc.opp)}</b></div>`:""}
     </div>`;
 

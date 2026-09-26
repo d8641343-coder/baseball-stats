@@ -79,7 +79,7 @@ function renderOverview(){
     <div class="card"><div class="v">${f2(pit.ERA)}</div><div class="k">球隊防禦率</div></div>
     <div class="card"><div class="v">${f2(pit.WHIP)}</div><div class="k">球隊 WHIP</div></div>`;
   const strip = games.map(g=>`<div class="form-dot ${gameResult(g)}" title="${g.date} vs ${esc(g.opp)} ${g.us}:${g.them}">${gameResult(g)==="W"?"勝":gameResult(g)==="L"?"敗":"和"}</div>`).join("");
-  document.getElementById("ovForm").innerHTML = games.length ? `<div class="hint" style="margin-top:4px">近況（左舊右新）</div><div class="form-strip">${strip}</div>` : `<div class="empty">此階級尚無比賽資料，先到「比賽記錄」建立，或用「匯入資料」一次帶入。</div>`;
+  document.getElementById("ovForm").innerHTML = games.length ? `<div class="hint" style="margin-top:4px">近況（左舊右新）</div><div class="form-strip">${strip}</div>` : `<div class="empty">此範圍（${esc(scopeLabel())}）尚無比賽資料，先到「比賽記錄」建立，或用「匯入資料」一次帶入。</div>`;
   drawChart("chartRuns", {
     type:"bar",
     data:{ labels: games.map(g=>g.date.slice(5)+" "+g.opp),
@@ -156,7 +156,7 @@ function toggleGame(id){ const el=document.getElementById("gc-"+id); if(!el) ret
 function renderGames(){
   // 依比賽日期時間排序、最近的排最前面（同日再依時間，再依建立時間，新的在前）
   const games = lvlGames().slice().sort((a,b)=> b.date.localeCompare(a.date) || (b.time||"").localeCompare(a.time||"") || (b.created||0)-(a.created||0));
-  if(!games.length){ document.getElementById("gameList").innerHTML = `<div class="empty">此階級尚無比賽。</div>`; return; }
+  if(!games.length){ document.getElementById("gameList").innerHTML = `<div class="empty">此範圍（${esc(scopeLabel())}）尚無比賽。</div>`; return; }
   document.getElementById("gameList").innerHTML = games.map(g=>{
     const r = gameResult(g);
     const editable = canEdit(g.level);
@@ -330,7 +330,7 @@ function renderBatting(){
   const games = windowGames(win.batting);
   const agg = battingAgg(games);
   const base = state.players.filter(p=>agg[p.id]).map(p=>({p, m:agg[p.id]}));
-  if(!base.length){ document.getElementById("batTable").innerHTML = `<div class="empty">此區間尚無打擊數據。</div>`; if(charts.chartBat){charts.chartBat.destroy();delete charts.chartBat;} return; }
+  if(!base.length){ document.getElementById("batTable").innerHTML = `<div class="empty">此範圍（${esc(scopeLabel())}）與區間尚無打擊數據。</div>`; document.getElementById("batSplit").innerHTML = ""; if(charts.chartBat){charts.chartBat.destroy();delete charts.chartBat;} return; }
   const rows = sortRows(base, "bat", BAT_GETTERS);
   const tot = sumBat(agg);
   const html = rows.map(({p,m})=>`<tr><td class="l">${avatarHTML(p)} ${nameLink(p.id)}</td>
@@ -378,7 +378,7 @@ function renderPitching(){
   const games = windowGames(win.pitching);
   const agg = pitchingAgg(games);
   const base = state.players.filter(p=>agg[p.id]).map(p=>({p, m:agg[p.id]}));
-  if(!base.length){ document.getElementById("pitTable").innerHTML = `<div class="empty">此區間尚無投球數據。</div>`; return; }
+  if(!base.length){ document.getElementById("pitTable").innerHTML = `<div class="empty">此範圍（${esc(scopeLabel())}）與區間尚無投球數據。</div>`; return; }
   const rows = sortRows(base, "pit", PIT_GETTERS);
   const tot = sumPit(agg);
   const html = rows.map(({p,m})=>`<tr><td class="l">${avatarHTML(p)} ${nameLink(p.id)}</td>
@@ -499,7 +499,10 @@ function openProfile(pid){
 function closeProfile(){ document.getElementById("modalBg").classList.remove("show"); currentPid = null; }
 function renderScouts(){
   renderReportOptions();
-  const list = (state.scouts||[]).slice().reverse();
+  const list = visibleScouts().slice().reverse();
+  const emptyTxt = squadFilter!=="all"
+    ? `此範圍（${esc(scopeLabel())}）尚無交手對手的情蒐報告。`
+    : `尚無情蒐報告。賽前先用上方任一方式建立，比賽卡片就會自動出現「對手情蒐」捷徑。`;
   document.getElementById("scoutList").innerHTML = list.length ? list.map(sc=>`
     <div class="scout-card" id="sc-${sc.id}">
       <div class="frow" style="justify-content:flex-end;gap:8px;float:right">
@@ -508,7 +511,14 @@ function renderScouts(){
         <button class="del" onclick="delScout('${sc.id}')">✕</button>
       </div>
       ${scoutCardHTML(sc,true)}
-    </div>`).join("") : `<div class="empty">尚無情蒐報告。賽前先用上方任一方式建立，比賽卡片就會自動出現「對手情蒐」捷徑。</div>`;
+    </div>`).join("") : `<div class="empty">${emptyTxt}</div>`;
+}
+// 情蒐報告沒有分隊屬性：選特定分隊時，只留目前篩選範圍內曾交手過的對手；全部分隊時全部顯示
+function visibleScouts(){
+  const all = state.scouts||[];
+  if(squadFilter==="all") return all;
+  const opps = new Set(lvlGames().map(g=>g.opp));
+  return all.filter(s=>opps.has(s.opp));
 }
 function renderHonors(){
   if(document.getElementById("aiScope")?.value==="tour") fillAiTour();
@@ -621,11 +631,11 @@ document.getElementById("lvlChips").addEventListener("click", e=>{
   lvl = e.target.dataset.lvl;
   renderAll();
 });
-document.getElementById("ovSquadChips").addEventListener("click", e=>{
+document.getElementById("squadChips").addEventListener("click", e=>{
   if(!e.target.classList.contains("chip")) return;
-  document.querySelectorAll("#ovSquadChips .chip").forEach(c=>c.classList.remove("active"));
+  document.querySelectorAll("#squadChips .chip").forEach(c=>c.classList.remove("active"));
   e.target.classList.add("active");
-  ovSquad = e.target.dataset.squad;
+  squadFilter = e.target.dataset.squad;
   renderAll();
 });
 [["ovChips","overview"],["batChips","batting"],["pitChips","pitching"]].forEach(([cid,key])=>{

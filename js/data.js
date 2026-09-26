@@ -1,5 +1,5 @@
 /* ───────── 版本(每次發布前更新此處) ───────── */
-const APP_VERSION = "v1.16.0 · 2026-09-26";
+const APP_VERSION = "v1.17.0 · 2026-09-26";
 
 /* ───────── 階級與 ERA 局制基準(單一來源，新增/調整階級改這裡) ───────── */
 const LEVELS = ["U12","U15","U18","OB","其他"];
@@ -10,7 +10,7 @@ let state = { teamName:"親子勇士", eraBases:{...ERA_BASE_DEFAULT}, players:[
 let win = { overview:"all", batting:"all", pitching:"all" };
 let lvl = "all";
 let tourFilter = "all";   // 賽事名稱篩選（全域，與階級一起套用）："all" 或某個賽事名稱
-let ovSquad = "all";   // 球隊近況的分隊篩選："all"|"藍"|"白"|"紅"
+let squadFilter = "all";   // 全域分隊篩選（與階級／賽事並聯）："all"|"藍"|"白"|"紅"；未分隊的舊比賽只在 all 時出現
 const openGames = new Set();   // 記住展開中的比賽卡片，讓即時同步重繪後仍保持展開
 const pendingErAI = {};   // gid -> {pid, reason, desc}，AI 判定自責分後暫存，登錄投球時併入該筆紀錄
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,6);
@@ -37,7 +37,12 @@ function normDate(s){
 function sortedGames(){ return [...state.games].sort((a,b)=> a.date.localeCompare(b.date) || (a.time||"").localeCompare(b.time||"") || (a.created||0)-(b.created||0)); }
 function lvlGames(){ return sortedGames().filter(g =>
   (lvl==="all" || (g.level||"U12")===lvl) &&
-  (tourFilter==="all" || (g.tour||"").trim()===tourFilter)); }
+  (tourFilter==="all" || (g.tour||"").trim()===tourFilter) &&
+  (squadFilter==="all" || (g.squad||"")===squadFilter)); }
+// 目前篩選條件的文字（空狀態提示、報告抬頭共用），例：「U12・協會盃・藍隊」
+function scopeLabel(){
+  return [lvl==="all"?"全隊":lvl, tourFilter!=="all"?tourFilter:"", squadFilter!=="all"?squadFilter+"隊":""].filter(Boolean).join("・");
+}
 // 所有比賽中出現過的賽事名稱（去重、排序），供頂部賽事篩選下拉使用
 function tourNames(){
   const set = new Set();
@@ -57,12 +62,7 @@ function sliceWindow(g, w){
   return g.slice(-Number(w));
 }
 function windowGames(w){ return sliceWindow(lvlGames(), w); }
-// 球隊近況專用：先套用階級與分隊篩選，再依區間切片
-function overviewGames(){
-  let g = lvlGames();
-  if(ovSquad!=="all") g = g.filter(x => (x.squad||"")===ovSquad);
-  return sliceWindow(g, win.overview);
-}
+function overviewGames(){ return sliceWindow(lvlGames(), win.overview); }
 function gameResult(g){ return g.us>g.them ? "W" : g.us<g.them ? "L" : "T"; }
 function mvpCounts(pid){
   let mvp=0, svp=0;
@@ -674,7 +674,7 @@ function seasonReportText(){
   const bAgg = battingAgg(g);
   const top = Object.entries(bAgg).filter(([,m])=>m.AB>0).sort((a,b)=>(b[1].OPS||0)-(a[1].OPS||0)).slice(0,3)
     .map(([pid,m],i)=>`${i+1}. ${playerName(pid)}  AVG ${f3(m.AVG)} / OPS ${f3(m.OPS)}`).join("\n");
-  let s = `⚾ ${state.teamName}${lvl!=="all"?` ${lvl}`:""} 戰報（${new Date().toLocaleDateString("zh-TW")}）\n`;
+  let s = `⚾ ${state.teamName}${lvl!=="all"?` ${lvl}`:""}${squadFilter!=="all"?` ${squadFilter}隊`:""} 戰報（${new Date().toLocaleDateString("zh-TW")}）\n`;
   s += `━━━━━━━━━━━━\n`;
   s += `戰績：${w} 勝 ${l} 敗 ${t} 和（${g.length} 場）\n`;
   if(form) s += `近況：${form}（左舊右新）\n`;
