@@ -837,7 +837,10 @@ function buildScoutReportHTML(){
   const rs = games.reduce((s,g)=>s+g.us,0), ra = games.reduce((s,g)=>s+g.them,0);
   const bAgg = battingAgg(games), pAgg = pitchingAgg(games);
   const tb = sumBat(bAgg), tp = sumPit(pAgg);
-  const form = games.map(g=>gameResult(g)==="W"?"勝":gameResult(g)==="L"?"敗":"和").join(" ");
+  // 區間不是「全部賽事」時，指標卡加「全季」比較（同階級/賽事/分隊篩選、區間=全部）
+  let full = null;
+  if(w!=="all"){ const fg = lvlGames(); full = {bat:sumBat(battingAgg(fg)), pit:sumPit(pitchingAgg(fg))}; }
+  const cmp = (cur, base, fmt, lowerBetter) => full ? ovCmp(cur, base, fmt, lowerBetter) : "";
   // 章節動態編號：依實際輸出的章節依序給號（含/不含對手情蒐、無打者/投手資料時都不會跳號）
   let secNo = 0;
   const secNum = () => "一二三四五六七八九十"[secNo++] + "、";
@@ -866,17 +869,18 @@ function buildScoutReportHTML(){
 
   h += `<div class="rp-sec">${secNum()}我方球隊近況（${winTxt}）</div>`;
   if(!games.length){
-    h += `<p>此範圍尚無比賽資料。</p>`;
+    h += ovTrendBlock(games, w, true).html;
   }else{
+    // 近況圖表與總覽同一套：1–3 場比賽卡片／4 場以上得失分差圖 + 累計打擊率、防禦率
     h += `<div class="rp-cards">
       <div class="rp-card"><div class="v">${wn}-${ln}-${tn}</div><div class="k">戰績</div></div>
       <div class="rp-card"><div class="v">${rs} : ${ra}</div><div class="k">得失分</div></div>
-      <div class="rp-card"><div class="v">${f3(tb.AVG)}</div><div class="k">團隊打擊率</div></div>
-      <div class="rp-card"><div class="v">${f3(tb.OPS)}</div><div class="k">團隊 OPS</div></div>
-      <div class="rp-card"><div class="v">${f2(tp.ERA)}</div><div class="k">團隊防禦率</div></div>
-      <div class="rp-card"><div class="v">${f2(tp.WHIP)}</div><div class="k">團隊 WHIP</div></div>
+      <div class="rp-card"><div class="v">${f3(tb.AVG)}</div><div class="k">團隊打擊率</div>${cmp(tb.AVG, full&&full.bat.AVG, f3)}</div>
+      <div class="rp-card"><div class="v">${f3(tb.OPS)}</div><div class="k">團隊 OPS</div>${cmp(tb.OPS, full&&full.bat.OPS, f3)}</div>
+      <div class="rp-card"><div class="v">${f2(tp.ERA)}</div><div class="k">團隊防禦率</div>${cmp(tp.ERA, full&&full.pit.ERA, f2, true)}</div>
+      <div class="rp-card"><div class="v">${f2(tp.WHIP)}</div><div class="k">團隊 WHIP</div>${cmp(tp.WHIP, full&&full.pit.WHIP, f2, true)}</div>
     </div>
-    <p><b>近況：</b>${form}（左舊右新）</p>`;
+    ${ovTrendBlock(games, w, true).html}`;
 
     const bRows = state.players.filter(p=>bAgg[p.id] && bAgg[p.id].PA>0)
       .map(p=>({p,m:bAgg[p.id]})).sort((a,b)=>(b.m.OPS||0)-(a.m.OPS||0));
@@ -956,7 +960,7 @@ function addCanvasPages(pdf, canvas, stage){
     const [t, b] = box(tr);
     return {t: t * ratio, b: b * ratio, tableB: box(tr.closest("table"))[1] * ratio};
   });
-  stage.querySelectorAll("tr, .rp-head, .rp-cards, .rp-note, .rp-foot, .rp-page > p, .rp-page > div > p, .rp-sec, img").forEach(el=>{
+  stage.querySelectorAll("tr, .rp-head, .rp-cards, .ov-chart, .ov-game, .ov-empty, .rp-note, .rp-foot, .rp-page > p, .rp-page > div > p, .rp-sec, img").forEach(el=>{
     let [t, b] = box(el);
     if(el.matches(".rp-sec")){                                         // 標題黏住後面：表格則黏到第一筆資料列
       const nx = el.nextElementSibling;

@@ -218,7 +218,15 @@ textarea{width:100%;min-height:60px;resize:vertical}
 .rp-page td.l, .rp-page th.l{text-align:left}
 .rp-cards{display:flex;gap:8px;margin:8px 0}
 .rp-card{flex:1;border:1px solid #ddd;border-radius:8px;padding:8px;text-align:center}
-.rp-card .v{font-size:17px;font-weight:800;color:#1c2e5c;font-family:Consolas,monospace}
+.rp-card .v{font-size:17px;font-weight:800;color:#1c2e5c;font-variant-numeric:tabular-nums;white-space:nowrap}
+.rp-card .cmp{font-size:10.5px;color:#888;margin-top:2px;white-space:nowrap}
+.rp-card .cmp.good{color:#1f7a4d} .rp-card .cmp.bad{color:#c34a36}
+/* 報告內沿用總覽的 .ov-* 近況元件，固定為桌面排版（不受手機 media query 影響） */
+.rp-page .ov-games{flex-wrap:nowrap;margin:8px 0}
+.rp-page .ov-game{flex:1 1 0;max-width:none;padding:12px 14px}
+.rp-page .ov-game-score{font-size:30px}
+.rp-page .ov-chart{margin:8px 0;padding:10px 12px 8px}
+.rp-page .rp-trends{grid-template-columns:1fr 1fr;gap:0 10px}
 .rp-card .k{font-size:10.5px;color:#888;margin-top:2px}
 .rp-note{background:#fdf8e7;border:1px solid #ecd48a;border-radius:8px;padding:10px;font-size:12.5px;white-space:pre-wrap}
 .rp-foot{margin-top:18px;border-top:1px solid #ddd;padding-top:8px;font-size:10.5px;color:#999;display:flex;justify-content:space-between}

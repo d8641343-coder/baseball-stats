@@ -70,29 +70,53 @@ const OV_FONT = '"Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,san
 const RES_TXT = { W:"勝", L:"敗", T:"和" };
 const WIN_TXT = { all:"全部賽事", "1m":"近一個月", "5":"近 5 場", "3":"近 3 場" };
 function renderOvTrend(games){
-  const box = document.getElementById("ovTrend");
   ["ovDiff","ovAvg","ovEra"].forEach(id => { if(charts[id]){ charts[id].destroy(); delete charts[id]; } });
+  const r = ovTrendBlock(games, win.overview, false);
+  document.getElementById("ovTrend").innerHTML = r.html;
+  if(r.draw) r.draw();
+}
+// 近況區塊共用（總覽畫面 + 球探報告 PDF）：asImg=true 時把圖表先畫成 PNG 內嵌，供 html2canvas 轉 PDF
+function ovTrendBlock(games, winKey, asImg){
   const n = games.length;
-  if(!n){
-    box.innerHTML = `<div class="empty ov-empty"><b>此區間沒有比賽</b><div class="hint">${esc(scopeLabel())}・${WIN_TXT[win.overview]||""}${win.overview==="all"?"　先到「比賽記錄」建立，或用「匯入資料」一次帶入。":""}</div></div>`;
-    return;
-  }
-  if(n <= 3){ box.innerHTML = `<div class="ov-games">${games.map(ovGameCardHTML).join("")}</div>`; return; }
+  if(!n) return { html:`<div class="empty ov-empty"><b>此區間沒有比賽</b><div class="hint">${esc(scopeLabel())}・${WIN_TXT[winKey]||""}${winKey==="all"&&!asImg?"　先到「比賽記錄」建立，或用「匯入資料」一次帶入。":""}</div></div>` };
+  if(n <= 3) return { html:`<div class="ov-games">${games.map(ovGameCardHTML).join("")}</div>` };
   const detailed = n <= 10;
   const cnt = r => games.filter(g=>gameResult(g)===r).length;
   const t = cnt("T");
   const legend = ovLg(OV_C.W,"勝 "+cnt("W")) + ovLg(OV_C.L,"敗 "+cnt("L")) + (t?ovLg(OV_C.T,"和 "+t):"");
-  box.innerHTML = ovChartCard("ovDiff", "每場得失分差", legend)
-    + `<div class="ov-trends">`
-    + ovChartCard("ovAvg", "累計打擊率", ovLg(OV_C.W,"累計","line") + ovLg(OV_C.dot,"單場","dot"))
-    + ovChartCard("ovEra", "累計防禦率", ovLg(OV_C.L,"累計","line") + ovLg(OV_C.dot,"單場","dot"))
+  const cfg = { ovDiff: ovDiffCfg(games, detailed), ...ovTrendCfgs(games, detailed) };
+  // PDF 版面內容寬 714px：分差圖整列、兩張趨勢圖並排
+  const body = id => asImg ? `<img src="${chartImg(cfg[id], id==="ovDiff"?690:330, id==="ovDiff"?240:190)}" alt="" style="width:100%;display:block">` : `<canvas id="${id}"></canvas>`;
+  const html = ovChartCard("ovDiff", "每場得失分差", legend, body("ovDiff"), asImg)
+    + `<div class="ov-trends${asImg?" rp-trends":""}">`
+    + ovChartCard("ovAvg", "累計打擊率", ovLg(OV_C.W,"累計","line") + ovLg(OV_C.dot,"單場","dot"), body("ovAvg"), asImg)
+    + ovChartCard("ovEra", "累計防禦率", ovLg(OV_C.L,"累計","line") + ovLg(OV_C.dot,"單場","dot"), body("ovEra"), asImg)
     + `</div>`;
-  drawOvDiff(games, detailed);
-  drawOvTrends(games, detailed);
+  return { html, draw: asImg ? null : () => Object.keys(cfg).forEach(id => drawChart(id, cfg[id])) };
+}
+// 在畫面外用固定尺寸畫一次 Chart.js，輸出 2 倍解析度 PNG（PDF 用）
+function chartImg(cfg, w, h){
+  if(typeof Chart === "undefined") return "";
+  const wrap = document.createElement("div");
+  wrap.style.cssText = `position:fixed;left:-10000px;top:0;width:${w}px;height:${h}px`;
+  const cv = document.createElement("canvas"); wrap.appendChild(cv); document.body.appendChild(wrap);
+  const c = new Chart(cv, { ...cfg, options:{ ...cfg.options, responsive:true, maintainAspectRatio:false, animation:false, devicePixelRatio:2,
+    plugins:{ ...cfg.options.plugins, tooltip:{enabled:false} } } });
+  const url = c.toBase64Image("image/png");
+  c.destroy(); wrap.remove();
+  return url;
+}
+// 「全季」比較行：區間值 vs 同篩選全部賽事；lowerBetter=防禦率/WHIP 越低越好
+function ovCmp(cur, base, fmt, lowerBetter){
+  const a = fmt(cur), b = fmt(base);
+  if(b==="-") return "";
+  if(a==="-" || a===b) return `<div class="cmp">全季 ${b}</div>`;
+  const up = cur > base, better = lowerBetter ? !up : up;
+  return `<div class="cmp ${better?"good":"bad"}">全季 ${b} ${up?"↑":"↓"}</div>`;
 }
 function ovLg(color, label, kind){ return `<span class="ov-lg"><i class="${kind||""}" style="background:${color}"></i>${label}</span>`; }
-function ovChartCard(id, title, legend){
-  return `<div class="chartbox ov-chart"><div class="ov-chart-head"><div class="ov-chart-title">${title}</div><div class="ov-legend">${legend}</div></div><div class="ov-canvas"><canvas id="${id}"></canvas></div></div>`;
+function ovChartCard(id, title, legend, body, asImg){
+  return `<div class="chartbox ov-chart"><div class="ov-chart-head"><div class="ov-chart-title">${title}</div><div class="ov-legend">${legend}</div></div>${asImg ? body : `<div class="ov-canvas">${body}</div>`}</div>`;
 }
 function ovGameCardHTML(g){
   const r = gameResult(g), bl = g.batting||[], pl = g.pitching||[];
@@ -146,7 +170,7 @@ function ovMonthPlugin(games){
     } };
 }
 function ovNice(v, step, up){ return (up ? Math.ceil(v/step) : Math.floor(v/step)) * step; }
-function drawOvDiff(games, detailed){
+function ovDiffCfg(games, detailed){
   const diffs = games.map(g=>g.us-g.them);
   const pad = detailed ? 4 : 1;
   let max = ovNice(Math.max(0, ...diffs) + (Math.max(...diffs)>0?pad:0), 5, true);
@@ -190,7 +214,7 @@ function drawOvDiff(games, detailed){
       ctx.restore();
     } }];
   if(!detailed) plugins.push(ovMonthPlugin(games));
-  drawChart("ovDiff", {
+  return {
     type:"bar",
     data:{ labels: games.map(g=>[g.opp, g.date.slice(5)]),
       datasets:[{ data: diffs, backgroundColor: games.map(g=>OV_C[gameResult(g)]),
@@ -207,9 +231,9 @@ function drawOvDiff(games, detailed){
         y:{ min, max, grid:{ color:OV_C.grid }, border:{display:false},
           ticks:{ stepSize:5, color:OV_C.tick, font:{size:11, family:OV_FONT}, callback:v=> v>0 ? "+"+v : v } } } },
     plugins
-  });
+  };
 }
-function drawOvTrends(games, detailed){
+function ovTrendCfgs(games, detailed){
   const cum = {AVG:[], ERA:[]}, one = {AVG:[], ERA:[]};
   const fin = v => isFinite(v) ? v : null;
   games.forEach((g,i)=>{
@@ -217,7 +241,7 @@ function drawOvTrends(games, detailed){
     cum.AVG.push(fin(sumBat(battingAgg(sub)).AVG)); cum.ERA.push(fin(sumPit(pitchingAgg(sub)).ERA));
     one.AVG.push(fin(sumBat(battingAgg([g])).AVG)); one.ERA.push(fin(sumPit(pitchingAgg([g])).ERA));
   });
-  const mk = (id, key, color, fmt) => {
+  const mk = (key, color, fmt) => {
     const c = cum[key].filter(v=>v!==null), s = one[key].filter(v=>v!==null);
     // Y 軸上限：以累計值為主，單場極端值（例如單場防禦率 27）夾在上緣，tooltip 仍顯示原值
     let ymax = key==="AVG" ? Math.min(1, Math.ceil(Math.max(.3, ...s, ...c)*10)/10)
@@ -231,7 +255,7 @@ function drawOvTrends(games, detailed){
       ctx.textBaseline = "middle"; ctx.textAlign = "left";
       ctx.beginPath(); ctx.arc(pts[i].x, pts[i].y, 3.5, 0, Math.PI*2); ctx.fill();
       ctx.fillText(fmt(cum[key][i]), pts[i].x + 7, pts[i].y); ctx.restore(); } };
-    drawChart(id, {
+    return {
       type:"line",
       data:{ labels: games.map(g=>g.date),
         datasets:[
@@ -251,10 +275,9 @@ function drawOvTrends(games, detailed){
           y:{ min:0, max:ymax, grid:{ color:OV_C.grid }, border:{display:false},
             ticks:{ color:OV_C.tick, font:{size:11, family:OV_FONT}, maxTicksLimit:5, callback: v => key==="AVG" ? f3(v) : v } } } },
       plugins: detailed ? [tail] : [tail, ovMonthPlugin(games)]
-    });
+    };
   };
-  mk("ovAvg", "AVG", OV_C.W, f3);
-  mk("ovEra", "ERA", OV_C.L, f2);
+  return { ovAvg: mk("AVG", OV_C.W, f3), ovEra: mk("ERA", OV_C.L, f2) };
 }
 function renderOverview(){
   const games = overviewGames();
@@ -266,13 +289,7 @@ function renderOverview(){
   // 區間不是「全部賽事」時，與「同篩選、區間=全部」的全季數值比較
   let full = null;
   if(win.overview!=="all"){ const fg = lvlGames(); full = {bat:sumBat(battingAgg(fg)), pit:sumPit(pitchingAgg(fg))}; }
-  const cmp = (cur, base, fmt, lowerBetter) => {
-    const a = fmt(cur), b = fmt(base);
-    if(b==="-") return "";
-    if(a==="-" || a===b) return `<div class="cmp">全季 ${b}</div>`;
-    const up = cur > base, better = lowerBetter ? !up : up;
-    return `<div class="cmp ${better?"good":"bad"}">全季 ${b} ${up?"↑":"↓"}</div>`;
-  };
+  const cmp = ovCmp;
   document.getElementById("ovCards").innerHTML = `
     <div class="card"><div class="v">${w}-${l}-${t}</div><div class="k">區間戰績</div></div>
     <div class="card"><div class="v nw">${rs} / ${ra}</div><div class="k nw">得分 / 失分</div></div>
