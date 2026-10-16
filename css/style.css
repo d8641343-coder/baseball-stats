@@ -119,9 +119,35 @@ td.num{font-family:var(--mono)}
 .media-item a{color:var(--navy);word-break:break-all}
 .vid-thumb{height:100px;display:flex;align-items:center;justify-content:center;background:var(--board);color:var(--gold);font-size:28px}
 
-.form-strip{display:flex;gap:4px;margin-top:4px;flex-wrap:wrap}
-.form-dot{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:700}
-.form-dot.W{background:var(--green)} .form-dot.L{background:var(--red)} .form-dot.T{background:var(--muted)}
+/* 總覽：球隊近況 */
+#ovCards{grid-template-columns:repeat(auto-fit,minmax(120px,1fr))}
+#ovCards .card .v{font-family:inherit;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+#ovCards .card .cmp{font-size:12px;color:var(--muted);margin-top:4px;font-variant-numeric:tabular-nums;white-space:nowrap}
+#ovCards .card .cmp.good{color:var(--green)} #ovCards .card .cmp.bad{color:var(--red)}
+.nw{white-space:nowrap}
+.ov-empty b{display:block;font-size:15px;color:var(--navy);margin-bottom:4px}
+.ov-games{display:flex;flex-wrap:wrap;gap:12px;margin:12px 0}
+.ov-game{flex:1 1 220px;max-width:360px;min-width:0;background:#fff;border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+.ov-game-top{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+.ov-game-meta{font-size:13px;color:var(--muted);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ov-res{flex:none;font-size:12px;font-weight:700;border-radius:6px;padding:2px 10px}
+.ov-res.W{background:#e3f1e9;color:var(--green)} .ov-res.L{background:#f9e3df;color:var(--red)} .ov-res.T{background:#eceef1;color:var(--muted)}
+.ov-game-opp{font-size:16px;font-weight:700;color:var(--ink);margin-top:6px;overflow-wrap:anywhere}
+.ov-game-score{font-size:36px;font-weight:700;color:var(--ink);line-height:1.2;margin:6px 0 10px;font-variant-numeric:tabular-nums}
+.ov-game-score .sep{color:var(--muted);font-size:24px;margin:0 10px;vertical-align:4px}
+.ov-game-foot{border-top:1px solid var(--line);padding-top:8px;font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.ov-game-foot .dotsep{margin:0 5px}
+.ov-chart{padding:14px 14px 10px}
+.ov-chart-head{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:4px 12px;margin-bottom:8px}
+.ov-chart-title{font-size:14px;font-weight:700;color:var(--navy)}
+.ov-legend{display:flex;gap:12px;flex-wrap:wrap}
+.ov-lg{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--muted);white-space:nowrap}
+.ov-lg i{width:10px;height:10px;border-radius:2px;display:inline-block}
+.ov-lg i.line{width:14px;height:3px;border-radius:2px}
+.ov-lg i.dot{width:8px;height:8px;border-radius:50%}
+.ov-canvas{position:relative;height:250px}
+.ov-trends{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:0 12px}
+.ov-trends .ov-canvas{height:200px}
 
 .chartbox{background:#fff;border:1px solid var(--line);border-radius:10px;padding:14px;margin:12px 0}
 .empty{padding:30px;text-align:center;color:var(--muted);background:#fff;border:1px dashed var(--line);border-radius:10px;margin:12px 0}
@@ -168,6 +194,8 @@ textarea{width:100%;min-height:60px;resize:vertical}
   .light{min-width:0;flex:1;padding:6px 4px}
   .light .num{font-size:18px}
   .sb-logo{width:52px;height:53px}
+  .ov-game{max-width:none}
+  .ov-game-score{font-size:32px}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 

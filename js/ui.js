@@ -64,6 +64,198 @@ function renderHeader(){
 }
 
 /* ───────── 總覽 ───────── */
+// 球隊近況：依篩選後「實際場數」切換 0=空狀態／1–3=比賽卡片／4–10=標數字分差圖+累計趨勢／11+=月份軸分差圖+累計趨勢
+const OV_C = { W:"#1c2e5c", L:"#c34a36", T:"#7b8290", grid:"#eeece5", tick:"#7b8290", base:"#4a5266", sep:"#d9d5c8", dot:"rgba(123,130,144,.38)" };
+const OV_FONT = '"Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif';
+const RES_TXT = { W:"勝", L:"敗", T:"和" };
+const WIN_TXT = { all:"全部賽事", "1m":"近一個月", "5":"近 5 場", "3":"近 3 場" };
+function renderOvTrend(games){
+  const box = document.getElementById("ovTrend");
+  ["ovDiff","ovAvg","ovEra"].forEach(id => { if(charts[id]){ charts[id].destroy(); delete charts[id]; } });
+  const n = games.length;
+  if(!n){
+    box.innerHTML = `<div class="empty ov-empty"><b>此區間沒有比賽</b><div class="hint">${esc(scopeLabel())}・${WIN_TXT[win.overview]||""}${win.overview==="all"?"　先到「比賽記錄」建立，或用「匯入資料」一次帶入。":""}</div></div>`;
+    return;
+  }
+  if(n <= 3){ box.innerHTML = `<div class="ov-games">${games.map(ovGameCardHTML).join("")}</div>`; return; }
+  const detailed = n <= 10;
+  const cnt = r => games.filter(g=>gameResult(g)===r).length;
+  const t = cnt("T");
+  const legend = ovLg(OV_C.W,"勝 "+cnt("W")) + ovLg(OV_C.L,"敗 "+cnt("L")) + (t?ovLg(OV_C.T,"和 "+t):"");
+  box.innerHTML = ovChartCard("ovDiff", "每場得失分差", legend)
+    + `<div class="ov-trends">`
+    + ovChartCard("ovAvg", "累計打擊率", ovLg(OV_C.W,"累計","line") + ovLg(OV_C.dot,"單場","dot"))
+    + ovChartCard("ovEra", "累計防禦率", ovLg(OV_C.L,"累計","line") + ovLg(OV_C.dot,"單場","dot"))
+    + `</div>`;
+  drawOvDiff(games, detailed);
+  drawOvTrends(games, detailed);
+}
+function ovLg(color, label, kind){ return `<span class="ov-lg"><i class="${kind||""}" style="background:${color}"></i>${label}</span>`; }
+function ovChartCard(id, title, legend){
+  return `<div class="chartbox ov-chart"><div class="ov-chart-head"><div class="ov-chart-title">${title}</div><div class="ov-legend">${legend}</div></div><div class="ov-canvas"><canvas id="${id}"></canvas></div></div>`;
+}
+function ovGameCardHTML(g){
+  const r = gameResult(g), bl = g.batting||[], pl = g.pitching||[];
+  let foot;
+  if(!bl.length && !pl.length) foot = `<span class="muted">無逐場紀錄</span>`;
+  else {
+    const parts = [];
+    if(bl.length){
+      const AB = bl.reduce((s,l)=>s+(l.AB||0),0), H = bl.reduce((s,l)=>s+(l.H||0),0);
+      parts.push(`<span class="nw">${H} 安 / ${AB} 打數</span><span class="nw">（${f3(AB?H/AB:NaN)}）</span>`);
+    }
+    if(pl.length) parts.push(`<span class="nw">自責 ${pl.reduce((s,l)=>s+(l.ER||0),0)}</span>`);
+    foot = parts.join(`<span class="dotsep">·</span>`);
+  }
+  return `<div class="ov-game">
+    <div class="ov-game-top"><span class="ov-game-meta" title="${esc(g.tour||"")}">${g.date.slice(5)}${(g.tour||"").trim()?" · "+esc(g.tour.trim()):""}</span><span class="ov-res ${r}">${RES_TXT[r]}</span></div>
+    <div class="ov-game-opp">vs ${esc(g.opp)}</div>
+    <div class="ov-game-score">${g.us}<span class="sep">:</span>${g.them}</div>
+    <div class="ov-game-foot">${foot}</div>
+  </div>`;
+}
+// 依寬度截斷文字（一個中文字約 1 個單位、英數約 0.55）
+function ovClip(s, units){
+  s = String(s||""); let u = 0, out = "";
+  for(const ch of s){ const w = /[\x00-\xff]/.test(ch) ? .55 : 1; if(u+w > units){ return out.replace(/.$/,"")+"…"; } u += w; out += ch; }
+  return out;
+}
+// 共用：每月第一場畫月份標籤（X 軸下方）與月份之間的淡色虛線
+function ovMonthPlugin(games){
+  const firsts = games.map((g,i)=> i===0 || g.date.slice(0,7)!==games[i-1].date.slice(0,7));
+  return { id:"ovMonth",
+    beforeDatasetsDraw(c){
+      const {ctx, chartArea:a, scales:{x}} = c;
+      ctx.save(); ctx.strokeStyle = OV_C.sep; ctx.setLineDash([3,3]); ctx.lineWidth = 1;
+      firsts.forEach((f,i)=>{ if(!f || !i) return;
+        const px = (x.getPixelForValue(i) + x.getPixelForValue(i-1)) / 2;
+        ctx.beginPath(); ctx.moveTo(px, a.top); ctx.lineTo(px, a.bottom); ctx.stroke(); });
+      ctx.restore();
+    },
+    afterDraw(c){
+      const {ctx, chartArea:a, scales:{x}} = c;
+      ctx.save(); ctx.fillStyle = OV_C.tick; ctx.font = `12px ${OV_FONT}`; ctx.textBaseline = "top"; ctx.textAlign = "left";
+      let lastEnd = -Infinity;
+      firsts.forEach((f,i)=>{ if(!f) return;
+        const txt = Number(games[i].date.slice(5,7))+"月";
+        const w = ctx.measureText(txt).width;
+        const px = Math.min(c.width - w - 2, Math.max(a.left, x.getPixelForValue(i) - 6));   // 最後一個月份別被右緣切掉
+        if(px < lastEnd + 4) return;              // 太擠就略過，避免「2月3月」黏在一起
+        ctx.fillText(txt, px, a.bottom + 6); lastEnd = px + w; });
+      ctx.restore();
+    } };
+}
+function ovNice(v, step, up){ return (up ? Math.ceil(v/step) : Math.floor(v/step)) * step; }
+function drawOvDiff(games, detailed){
+  const diffs = games.map(g=>g.us-g.them);
+  const pad = detailed ? 4 : 1;
+  let max = ovNice(Math.max(0, ...diffs) + (Math.max(...diffs)>0?pad:0), 5, true);
+  let min = ovNice(Math.min(0, ...diffs) - (Math.min(...diffs)<0?pad:0), 5, false);
+  if(max===0 && min===0) max = 5;
+  if(detailed && max===0) max = 5;   // 留空間給和局/全敗時的標籤
+  const tipTitle = items => { const g = games[items[0].dataIndex]; return `${g.date} vs ${g.opp}`; };
+  const tipLabel = it => { const g = games[it.dataIndex], d = g.us-g.them, r = gameResult(g);
+    return `${g.us}:${g.them}（${RES_TXT[r]} ${d>0?"+"+d:d}）`; };
+  const plugins = [{ id:"ovBase",
+    afterDatasetsDraw(c){
+      const {ctx, chartArea:a, scales:{y}} = c, y0 = y.getPixelForValue(0);
+      ctx.save(); ctx.strokeStyle = OV_C.base; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(a.left, y0); ctx.lineTo(a.right, y0); ctx.stroke();
+      // 和局分差 0 沒有柱子，在基準線上畫一小段灰色標記
+      ctx.fillStyle = OV_C.T;
+      c.getDatasetMeta(0).data.forEach((b,i)=>{ if(diffs[i]===0) ctx.fillRect(b.x - b.width/2, y0 - 2, b.width, 4); });
+      ctx.restore();
+      if(!detailed) return;
+      // 柱頂（敗場在柱底）標「+18（19:1）」；柱距不夠就拆兩行
+      const bars = c.getDatasetMeta(0).data, step = bars.length>1 ? Math.abs(bars[1].x-bars[0].x) : 999;
+      ctx.save(); ctx.textAlign = "center";
+      bars.forEach((b,i)=>{
+        const g = games[i], d = diffs[i], r = gameResult(g);
+        const top = `${d>0?"+":""}${d}`, sc = `${g.us}:${g.them}`;
+        ctx.fillStyle = OV_C[r];
+        ctx.font = `700 12px ${OV_FONT}`;
+        const one = `${top}（${sc}）`, fits = ctx.measureText(one).width <= step - 4;
+        const below = d < 0, dir = below ? 1 : -1, y = b.y + dir*5;
+        ctx.textBaseline = below ? "top" : "bottom";
+        if(fits){ ctx.fillText(one, b.x, y); return; }
+        const lines = below ? [top, sc] : [sc, top];   // 分差永遠貼近柱子
+        lines.forEach((t,k)=>{
+          const isDiff = t===top;
+          ctx.font = isDiff ? `700 12px ${OV_FONT}` : `11px ${OV_FONT}`;
+          ctx.fillStyle = isDiff ? OV_C[r] : OV_C.tick;
+          const off = below ? k*13 : -(1-k)*13;
+          ctx.fillText(t, b.x, y + off);
+        });
+      });
+      ctx.restore();
+    } }];
+  if(!detailed) plugins.push(ovMonthPlugin(games));
+  drawChart("ovDiff", {
+    type:"bar",
+    data:{ labels: games.map(g=>[g.opp, g.date.slice(5)]),
+      datasets:[{ data: diffs, backgroundColor: games.map(g=>OV_C[gameResult(g)]),
+        borderRadius:4, borderSkipped:"start", maxBarThickness:26, categoryPercentage:.8, barPercentage:.9 }]},
+    options:{ responsive:true, maintainAspectRatio:false, animation:false,
+      layout:{ padding:{ bottom: detailed ? 0 : 22, top: detailed ? 14 : 0 } },
+      plugins:{ legend:{display:false}, title:{display:false},
+        tooltip:{ displayColors:false, callbacks:{ title: tipTitle, label: tipLabel } } },
+      scales:{
+        x:{ grid:{display:false}, border:{display:false},
+          ticks:{ display: detailed, autoSkip:false, maxRotation:0, minRotation:0, color:OV_C.tick, font:{size:11, family:OV_FONT},
+            callback(v){ const [opp, d] = this.getLabelForValue(v), w = this.chart.width / games.length;
+              return [ovClip(opp, Math.max(2, (w-4)/12)), d]; } } },
+        y:{ min, max, grid:{ color:OV_C.grid }, border:{display:false},
+          ticks:{ stepSize:5, color:OV_C.tick, font:{size:11, family:OV_FONT}, callback:v=> v>0 ? "+"+v : v } } } },
+    plugins
+  });
+}
+function drawOvTrends(games, detailed){
+  const cum = {AVG:[], ERA:[]}, one = {AVG:[], ERA:[]};
+  const fin = v => isFinite(v) ? v : null;
+  games.forEach((g,i)=>{
+    const sub = games.slice(0,i+1);
+    cum.AVG.push(fin(sumBat(battingAgg(sub)).AVG)); cum.ERA.push(fin(sumPit(pitchingAgg(sub)).ERA));
+    one.AVG.push(fin(sumBat(battingAgg([g])).AVG)); one.ERA.push(fin(sumPit(pitchingAgg([g])).ERA));
+  });
+  const mk = (id, key, color, fmt) => {
+    const c = cum[key].filter(v=>v!==null), s = one[key].filter(v=>v!==null);
+    // Y 軸上限：以累計值為主，單場極端值（例如單場防禦率 27）夾在上緣，tooltip 仍顯示原值
+    let ymax = key==="AVG" ? Math.min(1, Math.ceil(Math.max(.3, ...s, ...c)*10)/10)
+                           : Math.max(5, Math.ceil(Math.max(0, ...c)*1.8/5)*5);
+    const shown = one[key].map(v => v===null ? null : Math.min(v, ymax));
+    const tail = { id:"ovTail", afterDatasetsDraw(ch){
+      const pts = ch.getDatasetMeta(0).data; let i = cum[key].length-1;
+      while(i>=0 && cum[key][i]===null) i--;
+      if(i<0) return;
+      const {ctx} = ch; ctx.save(); ctx.fillStyle = color; ctx.font = `700 12px ${OV_FONT}`;
+      ctx.textBaseline = "middle"; ctx.textAlign = "left";
+      ctx.beginPath(); ctx.arc(pts[i].x, pts[i].y, 3.5, 0, Math.PI*2); ctx.fill();
+      ctx.fillText(fmt(cum[key][i]), pts[i].x + 7, pts[i].y); ctx.restore(); } };
+    drawChart(id, {
+      type:"line",
+      data:{ labels: games.map(g=>g.date),
+        datasets:[
+          { label:"累計", data: cum[key], borderColor: color, backgroundColor: color, borderWidth:2, pointRadius:0, pointHoverRadius:4, tension:.25, spanGaps:true },
+          { label:"單場", data: shown, showLine:false, pointRadius:3, pointHoverRadius:4, backgroundColor: OV_C.dot, borderColor:"transparent" } ]},
+      options:{ responsive:true, maintainAspectRatio:false, animation:false,
+        interaction:{ mode:"index", intersect:false },
+        layout:{ padding:{ right:44, bottom: detailed ? 0 : 22, top:6 } },
+        plugins:{ legend:{display:false},
+          tooltip:{ callbacks:{
+            title: items => { const g = games[items[0].dataIndex]; return `${g.date} vs ${g.opp}`; },
+            label: it => { const raw = (it.datasetIndex ? one : cum)[key][it.dataIndex]; return `${it.dataset.label} ${raw===null?"-":fmt(raw)}`; } } } },
+        scales:{
+          // 4–10 場逐場標日期；11 場以上改由 ovMonthPlugin 標月份
+          x:{ grid:{display:false}, border:{display:false},
+            ticks:{ display: detailed, autoSkip:false, maxRotation:0, color:OV_C.tick, font:{size:11, family:OV_FONT}, callback(v){ return this.getLabelForValue(v).slice(5); } } },
+          y:{ min:0, max:ymax, grid:{ color:OV_C.grid }, border:{display:false},
+            ticks:{ color:OV_C.tick, font:{size:11, family:OV_FONT}, maxTicksLimit:5, callback: v => key==="AVG" ? f3(v) : v } } } },
+      plugins: detailed ? [tail] : [tail, ovMonthPlugin(games)]
+    });
+  };
+  mk("ovAvg", "AVG", OV_C.W, f3);
+  mk("ovEra", "ERA", OV_C.L, f2);
+}
 function renderOverview(){
   const games = overviewGames();
   const w = games.filter(x=>gameResult(x)==="W").length;
@@ -71,23 +263,24 @@ function renderOverview(){
   const t = games.length - w - l;
   const rs = games.reduce((s,x)=>s+x.us,0), ra = games.reduce((s,x)=>s+x.them,0);
   const bat = sumBat(battingAgg(games)), pit = sumPit(pitchingAgg(games));
+  // 區間不是「全部賽事」時，與「同篩選、區間=全部」的全季數值比較
+  let full = null;
+  if(win.overview!=="all"){ const fg = lvlGames(); full = {bat:sumBat(battingAgg(fg)), pit:sumPit(pitchingAgg(fg))}; }
+  const cmp = (cur, base, fmt, lowerBetter) => {
+    const a = fmt(cur), b = fmt(base);
+    if(b==="-") return "";
+    if(a==="-" || a===b) return `<div class="cmp">全季 ${b}</div>`;
+    const up = cur > base, better = lowerBetter ? !up : up;
+    return `<div class="cmp ${better?"good":"bad"}">全季 ${b} ${up?"↑":"↓"}</div>`;
+  };
   document.getElementById("ovCards").innerHTML = `
     <div class="card"><div class="v">${w}-${l}-${t}</div><div class="k">區間戰績</div></div>
-    <div class="card"><div class="v">${rs} / ${ra}</div><div class="k">得分 / 失分</div></div>
-    <div class="card"><div class="v">${f3(bat.AVG)}</div><div class="k">球隊打擊率</div></div>
-    <div class="card"><div class="v">${f3(bat.OPS)}</div><div class="k">球隊 OPS</div></div>
-    <div class="card"><div class="v">${f2(pit.ERA)}</div><div class="k">球隊防禦率</div></div>
-    <div class="card"><div class="v">${f2(pit.WHIP)}</div><div class="k">球隊 WHIP</div></div>`;
-  const strip = games.map(g=>`<div class="form-dot ${gameResult(g)}" title="${g.date} vs ${esc(g.opp)} ${g.us}:${g.them}">${gameResult(g)==="W"?"勝":gameResult(g)==="L"?"敗":"和"}</div>`).join("");
-  document.getElementById("ovForm").innerHTML = games.length ? `<div class="hint" style="margin-top:4px">近況（左舊右新）</div><div class="form-strip">${strip}</div>` : `<div class="empty">此範圍（${esc(scopeLabel())}）尚無比賽資料，先到「比賽記錄」建立，或用「匯入資料」一次帶入。</div>`;
-  drawChart("chartRuns", {
-    type:"bar",
-    data:{ labels: games.map(g=>g.date.slice(5)+" "+g.opp),
-      datasets:[
-        {label:"得分",data:games.map(g=>g.us),backgroundColor:"#1c2e5c"},
-        {label:"失分",data:games.map(g=>g.them),backgroundColor:"#c34a36"}]},
-    options:{responsive:true,plugins:{title:{display:true,text:"每場得失分"}},scales:{y:{beginAtZero:true,ticks:{precision:0}}}}
-  });
+    <div class="card"><div class="v nw">${rs} / ${ra}</div><div class="k nw">得分 / 失分</div></div>
+    <div class="card"><div class="v">${f3(bat.AVG)}</div><div class="k">球隊打擊率</div>${full?cmp(bat.AVG,full.bat.AVG,f3):""}</div>
+    <div class="card"><div class="v">${f3(bat.OPS)}</div><div class="k">球隊 OPS</div>${full?cmp(bat.OPS,full.bat.OPS,f3):""}</div>
+    <div class="card"><div class="v">${f2(pit.ERA)}</div><div class="k">球隊防禦率</div>${full?cmp(pit.ERA,full.pit.ERA,f2,true):""}</div>
+    <div class="card"><div class="v">${f2(pit.WHIP)}</div><div class="k">球隊 WHIP</div>${full?cmp(pit.WHIP,full.pit.WHIP,f2,true):""}</div>`;
+  renderOvTrend(games);
   const agg = battingAgg(games);
   const rows = Object.entries(agg).filter(([,m])=>m.AB>0)
     .sort((a,b)=> (b[1].OPS||0)-(a[1].OPS||0)).slice(0,10)
