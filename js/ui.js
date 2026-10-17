@@ -473,6 +473,7 @@ function renderGames(){
         <div class="ai-highlight" style="margin-top:6px">
           ${g.aiHighlight ? aiHighlightHTML(g) : `<span class="hint">尚無 AI 賽後焦點總結，適合直接貼到 LINE 群組給隊內選手/家長看。</span>`}
           <button class="btn ghost sm edit-only" id="hlBtn-${g.id}" style="margin-top:6px" onclick="aiGameHighlight('${g.id}')">🎙️ ${g.aiHighlight?"重新產生賽後焦點總結":"AI 賽後焦點總結"}</button>
+          ${gamePdfRowHTML(g)}
         </div>
 
         <div class="subhead">打擊登錄（四死球含觸身球）</div>

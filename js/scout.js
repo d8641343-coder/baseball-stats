@@ -532,13 +532,28 @@ function aiHighlightHTML(g){
     <div class="hint" style="margin-top:4px">AI 撰寫日期：${new Date(h.created).toLocaleDateString("zh-TW")}</div>
     <div class="frow" style="margin-top:6px">
       <button class="btn gold sm" onclick="copyHighlight('${g.id}')">📋 複製文字（貼到 LINE 分享）</button>
-      <button class="btn ghost sm" id="hlPdfBtn-${g.id}" onclick="downloadHighlightPDF('${g.id}')">📄 下載 PDF</button>
     </div>`;
 }
-/* 賽後焦點 PDF：跟球探報告共用 #pdfStage 離屏容器與 rp- 系列排版樣式（見 buildScoutReportHTML）、
-   同一套 html2canvas+jsPDF 產生流程，只是內容換成焦點文章本身，不含編輯用的表單/按鈕。*/
-function buildHighlightPdfHTML(gid){
-  const g = state.games.find(x=>x.id===gid); if(!g || !g.aiHighlight) return "";
+/* 賽後總結 PDF 下載列：可勾選要不要含 AI 焦點花絮評論（輸球時有人只想看數據）。
+   勾選狀態記在 localStorage 當個人偏好，renderAll 重繪後維持；沒有花絮時只能出純數據版。*/
+const HL_PDF_INC_KEY = "hlPdfIncHighlight";
+function hlPdfIncPref(){ try{ return localStorage.getItem(HL_PDF_INC_KEY) !== "0"; }catch(e){ return true; } }
+function setHlPdfIncPref(on){ try{ localStorage.setItem(HL_PDF_INC_KEY, on?"1":"0"); }catch(e){} }
+function gamePdfRowHTML(g){
+  if(!g.aiHighlight && !(g.batting||[]).length && !(g.pitching||[]).length) return "";
+  const inc = !!g.aiHighlight && hlPdfIncPref();
+  return `<div class="frow" style="margin-top:6px;gap:10px;align-items:center">
+      <button class="btn ghost sm" id="hlPdfBtn-${g.id}" onclick="downloadHighlightPDF('${g.id}')">📄 下載賽後總結 PDF</button>
+      <label style="display:inline-flex;align-items:center;gap:4px;font-size:13px;cursor:${g.aiHighlight?"pointer":"default"};${g.aiHighlight?"":"opacity:.5"}"${g.aiHighlight?"":` title="尚未產生 AI 賽後焦點總結"`}>
+        <input type="checkbox" id="hlPdfInc-${g.id}" ${inc?"checked":""} ${g.aiHighlight?"":"disabled"} onchange="setHlPdfIncPref(this.checked)"> 含 AI 焦點花絮評論
+      </label>
+    </div>`;
+}
+/* 賽後總結 PDF：跟球探報告共用 #pdfStage 離屏容器與 rp- 系列排版樣式（見 buildScoutReportHTML）、
+   同一套 html2canvas+jsPDF 產生流程。incHighlight=false 時為純數據版：不放 AI 花絮文章與 AI 評選理由。*/
+function buildHighlightPdfHTML(gid, incHighlight){
+  const g = state.games.find(x=>x.id===gid); if(!g) return "";
+  const inc = incHighlight && !!g.aiHighlight;
   const r = gameResult(g);
   const isWin = r !== "L";
   const awShort = isWin ? "MVP" : "SVP";
@@ -549,7 +564,7 @@ function buildHighlightPdfHTML(gid){
   let h = `<div class="rp-page">
     <div class="rp-head">
       ${logo?`<img src="${logo}" alt="">`:""}
-      <div><h1>${esc(state.teamName)} 賽後焦點</h1>
+      <div><h1>${esc(state.teamName)} ${inc?"賽後焦點":"賽後總結"}</h1>
         <div class="sub">${esc(g.date)}${g.tour?`【${esc(g.tour)}】`:""} vs ${esc(g.opp)}</div></div>
       <div class="rp-vs">比分<br><b>${g.us} : ${g.them}</b><br>${r==="W"?"勝":r==="L"?"敗":"和"}</div>
     </div>`;
@@ -557,11 +572,11 @@ function buildHighlightPdfHTML(gid){
   if(offPid || aiAw){
     h += `<div class="rp-sec">${awIcon} 單場 ${awShort}</div><p style="font-size:12.5px;line-height:1.8">`;
     if(offPid) h += `<b>官方/教練選出：</b>${esc(playerName(offPid))}<br>`;
-    if(aiAw) h += `<b>🤖 AI 選出：</b>${esc(aiAw.name||playerName(aiAw.pid))}${aiAw.reason?`　${esc(aiAw.reason)}`:""}`;
+    if(aiAw) h += `<b>🤖 AI 選出：</b>${esc(aiAw.name||playerName(aiAw.pid))}${inc&&aiAw.reason?`　${esc(aiAw.reason)}`:""}`;
     h += `</p>`;
   }
 
-  h += `<p style="font-size:11px;color:#999">🤖 以下由 AI 小編自動生成，僅供隊內娛樂分享，非教練/管理者發言</p>
+  if(inc) h += `<p style="font-size:11px;color:#999">🤖 以下由 AI 小編自動生成，僅供隊內娛樂分享，非教練/管理者發言</p>
     <div class="rp-note" style="font-size:13px;line-height:1.9">${esc(g.aiHighlight.text)}</div>`;
 
   if((g.batting||[]).length){
@@ -588,31 +603,33 @@ function buildHighlightPdfHTML(gid){
     h += `</p>`;
   }
 
-  h += `<div class="rp-foot"><span>${esc(state.teamName)} · 攻守數據中心</span><span>AI 生成內容，僅供隊內娛樂分享參考</span></div></div>`;
+  h += `<div class="rp-foot"><span>${esc(state.teamName)} · 攻守數據中心</span><span>${inc?"AI 生成內容，僅供隊內娛樂分享參考":"本場比賽數據"}</span></div></div>`;
   return h;
 }
 async function downloadHighlightPDF(gid){
-  const g = state.games.find(x=>x.id===gid); if(!g || !g.aiHighlight) return;
+  const g = state.games.find(x=>x.id===gid); if(!g) return;
+  const cb = document.getElementById("hlPdfInc-"+gid);
+  const inc = !!g.aiHighlight && (cb ? cb.checked : hlPdfIncPref());
   const btn = document.getElementById("hlPdfBtn-"+gid);
   if(btn){ btn.disabled = true; btn.innerHTML = `<span class="spinner"></span>產生中…`; }
   try{
     const ok = await loadPdfLibs();
     if(!ok) throw new Error("PDF 函式庫載入失敗，請檢查網路後重試");
     const stage = document.getElementById("pdfStage");
-    stage.innerHTML = buildHighlightPdfHTML(gid);
+    stage.innerHTML = buildHighlightPdfHTML(gid, inc);
     await new Promise(r=>setTimeout(r, 120));   // 等待圖片渲染
     const canvas = await html2canvas(stage, {scale:2, backgroundColor:"#ffffff", logging:false});
     const { jsPDF } = window.jspdf;
     const pdf = new jsPDF({unit:"mm", format:"a4", orientation:"portrait"});
     addCanvasPages(pdf, canvas, stage);
-    pdf.save(`${state.teamName}_賽後焦點_${g.date}.pdf`);
+    pdf.save(`${state.teamName}_${inc?"賽後焦點":"賽後總結"}_${g.date}.pdf`);
     stage.innerHTML = "";
     toast("PDF 已下載");
   }catch(e){
     console.error(e);
     toast("PDF 產生失敗："+(e.message||"請稍後再試"));
   }
-  if(btn){ btn.disabled = false; btn.textContent = "📄 下載 PDF"; }
+  if(btn){ btn.disabled = false; btn.textContent = "📄 下載賽後總結 PDF"; }
 }
 async function aiPickMVP(){
   const scope = document.getElementById("aiScope").value;
