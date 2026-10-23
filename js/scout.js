@@ -25,7 +25,8 @@ const AI_MODELS = [
   { id:"claude-haiku-4-5",  label:"Haiku 4.5（最省）" },
   { id:"claude-sonnet-4-6", label:"Sonnet 4.6（現行預設）" },
   { id:"claude-sonnet-5",   label:"Sonnet 5（較新較強）" },
-  { id:"claude-opus-4-8",   label:"Opus 4.8（最強最貴）" }
+  { id:"claude-opus-4-8",   label:"Opus 4.8（最強最貴）" },
+  { id:"claude-opus-5",     label:"Opus 5" }
 ];
 const AI_FEATURES = {
   scout:"AI 網路情蒐", urlscout:"成績網頁分析", gamemvp:"單場 MVP 評選",
@@ -97,7 +98,10 @@ async function callClaude(prompt, useWeb, feature, temperature = 0.2){
   let text = "", inTok = 0, outTok = 0;
   try{
     for(let round = 0; round < 2; round++){
-      const body = { model, max_tokens:1600, temperature, messages };
+      // max_tokens 留寬：Sonnet 5 / Opus 5 這類新模型預設會思考，思考 token 也算在內，1600 容易截斷 JSON
+      const body = { model, max_tokens:3000, messages };
+      // Sonnet 5 / Opus 4.8 / Opus 5 等新模型已移除取樣參數，帶 temperature 會直接 400；只有 Haiku 4.x / Sonnet 4.x 可送
+      if(/^claude-(haiku|sonnet)-4/.test(model)) body.temperature = temperature;
       // max_uses 封頂單次呼叫的搜尋輪數：每多搜一次就要把前面全部結果重送一次當 input，
       // 不設上限容易被沒查到精準資料時瘋狂換關鍵字搜到爆量 token
       if(useWeb) body.tools = [{type:webTool, name:"web_search", max_uses:4}];
@@ -115,8 +119,12 @@ async function callClaude(prompt, useWeb, feature, temperature = 0.2){
       try{ data = await res.json(); }
       catch(e){ throw new Error("回應格式異常（HTTP "+res.status+"），請稍後再試"); }
       if(data.error){
-        if(res.status === 401) throw new Error("API Key 無效或已被撤銷，請通知管理者更新");
-        throw new Error(data.error.message || "API 錯誤");
+        // 4xx（Key/模型/參數設定問題）重試或換備援都沒用，標記 fatal 讓呼叫端直接顯示錯誤、不要空轉
+        const err = new Error(res.status === 401
+          ? "API Key 無效或已被撤銷，請通知管理者更新"
+          : (data.error.message || "API 錯誤"));
+        err.fatal = res.status >= 400 && res.status < 500 && res.status !== 429;
+        throw err;
       }
       if(!Array.isArray(data.content)) throw new Error("回應內容異常，請稍後再試");
       if(data.usage){ inTok += data.usage.input_tokens||0; outTok += data.usage.output_tokens||0; }
@@ -348,6 +356,7 @@ async function aiScout(){
 ${taskDesc}
 ${SCOUT_JSON_SPEC}`, true, "scout");
     }catch(e1){
+      if(e1.fatal) throw e1;   // Key/模型/參數錯誤：備援一樣會失敗，直接顯示原因
       // 方案二：自行搜尋後交給 AI 整理
       const digest = await gatherScoutIntel(mode==="player" ? [player, opp].filter(Boolean) : [opp], league, hint, setStatus);
       setStatus("AI 整理報告中…");
@@ -476,8 +485,7 @@ ${gameBoxDigest(g)}
 {"name":"球員姓名或null","reason":"40字內理由"}
 若資料不足以評選，name 填 null 並在 reason 說明。`;
     const text = await callClaude(prompt, false, "gamemvp");
-    const clean = text.replace(/```json|```/g,"").trim();
-    const rj = JSON.parse(clean);
+    const rj = parseAIJson(text);
     if(!rj.name){ toast("AI 判斷本場資料不足以評選"); if(btn){ btn.disabled=false; btn.textContent=`🤖 AI 選出單場 ${awShort}`; } return; }
     const p = state.players.find(x=>x.name===rj.name);
     g[aiKey] = { pid: p?p.id:null, name: rj.name, reason: rj.reason||"" };
@@ -664,8 +672,7 @@ ${statsDigest(games)}
 {"pitcher":{"name":"姓名或null","reason":"50字內理由"},"fielder":{"name":"姓名或null","reason":"50字內理由"},"summary":"整體評語60字內"}
 若某類別無足夠數據，name 填 null 並在 reason 說明。`;
     const text = await callClaude(prompt, false, "mvp");
-    const clean = text.replace(/```json|```/g,"").trim();
-    const r = JSON.parse(clean);
+    const r = parseAIJson(text);
     const findPid = n => { const p = state.players.find(p=>p.name===n); return p?p.id:null; };
     const honor = { id:uid(), type: scope==="month"?"monthly":scope==="tour"?"tournament":"yearly", period, level:lvl,
       pitcher: r.pitcher&&r.pitcher.name ? {pid:findPid(r.pitcher.name), name:r.pitcher.name, reason:r.pitcher.reason} : null,
