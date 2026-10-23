@@ -712,7 +712,7 @@ function renderScouts(){
   renderReportOptions();
   const list = visibleScouts().slice().reverse();
   const emptyTxt = squadFilter!=="all"
-    ? `此範圍（${esc(scopeLabel())}）尚無交手對手的情蒐報告。`
+    ? `此範圍（${esc(scopeLabel())}）尚無對手情蒐報告（只與其他分隊交手過的對手已隱藏，切到「全部分隊」可看全部）。`
     : `尚無情蒐報告。賽前先用上方任一方式建立，比賽卡片就會自動出現「對手情蒐」捷徑。`;
   document.getElementById("scoutList").innerHTML = list.length ? list.map(sc=>`
     <div class="scout-card" id="sc-${sc.id}">
@@ -724,12 +724,18 @@ function renderScouts(){
       ${scoutCardHTML(sc,true)}
     </div>`).join("") : `<div class="empty">${emptyTxt}</div>`;
 }
-// 情蒐報告沒有分隊屬性：選特定分隊時，只留目前篩選範圍內曾交手過的對手；全部分隊時全部顯示
+// 情蒐報告沒有分隊屬性：選特定分隊時，顯示「目前篩選範圍內曾交手過」的對手，
+// 以及「還沒跟任何分隊交手過」的對手（賽前新建、尚未開打的情蒐，不能因為沒比過就藏起來）；
+// 只有「別的分隊交手過、本分隊沒有」的對手才隱藏。全部分隊時全部顯示。
+// 隊名比對忽略括號/空白並容許包含（情蒐的「敦化國中(紅)」與比賽記錄的「敦化國中」視為同一隊）
 function visibleScouts(){
   const all = state.scouts||[];
   if(squadFilter==="all") return all;
-  const opps = new Set(lvlGames().map(g=>g.opp));
-  return all.filter(s=>opps.has(s.opp));
+  const key = s => String(s||"").replace(/[()（）\s]/g,"");
+  const same = (a,b)=>{ a = key(a); b = key(b); return !!a && !!b && (a===b || (a.length>=2 && b.length>=2 && (a.includes(b)||b.includes(a)))); };
+  const mine = lvlGames().map(g=>g.opp);
+  const everPlayed = (state.games||[]).map(g=>g.opp);
+  return all.filter(s => mine.some(o=>same(o,s.opp)) || !everPlayed.some(o=>same(o,s.opp)));
 }
 function renderHonors(){
   if(document.getElementById("aiScope")?.value==="tour") fillAiTour();
