@@ -346,33 +346,34 @@ function parsePastedScout(){
 }
 async function aiScout(){
   const mode = document.getElementById("scMode").value;
-  const opp = document.getElementById("scOpp").value.trim();
-  const player = document.getElementById("scPlayer").value.trim();
+  let opp = document.getElementById("scOpp").value.trim();       // let：選手/球隊填反時會自動對調
+  let player = document.getElementById("scPlayer").value.trim();
   if(mode === "team" && !opp) return toast("請輸入對手隊名");
   if(mode === "player" && !player) return toast("請輸入選手姓名");
   if(!await aiGate("scout")) return;
   const league = document.getElementById("scLeague").value.trim();
   const hint = document.getElementById("scHint").value.trim();
-  const target = mode === "player" ? player : opp;
+  let target = mode === "player" ? player : opp;
   const btn = document.getElementById("scBtn");
   const setStatus = t => { btn.innerHTML = `<span class="spinner"></span>${esc(t)}`; };
   btn.disabled = true; setStatus("搜尋整理中…");
   document.getElementById("scOut").innerHTML = "";
   try{
-    const masked = mode === "player" ? maskNameVariants(player) : null;
-    const maskHint = masked
-      ? `「就是棒」myscore.games 等成績網站基於隱私會把姓名的第二個字遮蔽成「〇」，這位選手可能顯示為「${masked[0]}」（或寫成「${masked[1]}」），請也嘗試用這些寫法搜尋，並視為同一人。`
-      : "";
-    const taskDesc = mode === "player"
-      ? `調查台灣的棒球選手「${player}」${opp?`（所屬球隊：${opp}）`:""}。${maskHint}我方球隊「${state.teamName}」即將與這位選手對戰，請整理：角色（投手/打者）、左右投打、近期表現與特徵、需要留意的原因，以及我方應對建議。keyPlayers 以這位選手為主，同隊其他值得留意者可一併列入。`
-      : `調查台灣的棒球隊「${opp}」。我方球隊「${state.teamName}」即將與他們對戰，請整理：對手近況與打法風格、需要留意的指標球員（投手與打者）與原因、以及我方應對建議。`;
     let text = null, directSrc = "", directNote = "";
     // 方案零：已記住就是棒賽事 + 有隊名 → 直接讀球隊頁/個人頁（不搜尋，token 最省）
     const msGid = msGidGet();
-    if(msGid && opp){
+    if(msGid && (opp || (mode === "player" && player))){
       try{
         setStatus("讀取就是棒…");
-        const team = await myscoreFindTeam(msGid, opp);
+        let team = opp ? await myscoreFindTeam(msGid, opp) : null;
+        if(!team && mode === "player" && player){
+          // 「選手姓名」與「所屬球隊」填反：若選手欄的字剛好是賽事裡的隊名，就自動對調
+          const t2 = await myscoreFindTeam(msGid, player);
+          if(t2){
+            team = t2; [opp, player] = [player, opp]; target = player || opp;
+            directNote = "偵測到「選手姓名」與「所屬球隊」填反了，已自動對調。";
+          }
+        }
         if(team){
           const teamUrl = `${MS_ORIGIN}/team_detail.php?cate=&type=&game_id=${msGid}&team_id=${team.tid}`;
           const m = await myscoreScout(teamUrl, parseMyscoreUrl(teamUrl), team.name, mode === "player" ? player : "");
@@ -380,7 +381,7 @@ async function aiScout(){
           text = await callClaude(m.prompt, false, "scout");
           directSrc = m.srcUrl;
         }else{
-          directNote = `就是棒賽事（game_id ${msGid}）裡找不到「${opp}」，已改用網路搜尋（資料可能來自其他賽季）。若對手在別的賽事，請更新上方賽事網址。`;
+          directNote = `就是棒賽事（game_id ${msGid}）裡找不到「${opp || player}」，已改用網路搜尋（資料可能來自其他賽季）。若對手在別的賽事，請更新上方賽事網址。`;
         }
       }catch(e0){
         if(e0.fatal || e0.stop) throw e0;   // Key/模型錯誤，或隊名不明確/找不到球員：直接顯示原因
@@ -388,6 +389,15 @@ async function aiScout(){
         directNote = `就是棒直連失敗（${e0.message || "連線錯誤"}），已改用網路搜尋。`;
       }
     }
+    // 以下為網路搜尋用的任務描述（放在直連之後：直連可能已自動對調選手/球隊）
+    const asPlayer = mode === "player" && !!player;
+    const masked = asPlayer ? maskNameVariants(player) : null;
+    const maskHint = masked
+      ? `「就是棒」myscore.games 等成績網站基於隱私會把姓名的第二個字遮蔽成「〇」，這位選手可能顯示為「${masked[0]}」（或寫成「${masked[1]}」），請也嘗試用這些寫法搜尋，並視為同一人。`
+      : "";
+    const taskDesc = asPlayer
+      ? `調查台灣的棒球選手「${player}」${opp?`（所屬球隊：${opp}）`:""}。${maskHint}我方球隊「${state.teamName}」即將與這位選手對戰，請整理：角色（投手/打者）、左右投打、近期表現與特徵、需要留意的原因，以及我方應對建議。keyPlayers 以這位選手為主，同隊其他值得留意者可一併列入。`
+      : `調查台灣的棒球隊「${opp}」。我方球隊「${state.teamName}」即將與他們對戰，請整理：對手近況與打法風格、需要留意的指標球員（投手與打者）與原因、以及我方應對建議。`;
     // 方案一：內建網路搜尋
     if(text === null) try{
       // 搜尋限定在「就是棒」(myscore.games)：關鍵字用「${target} 就是棒」最準，查不到就回報 found:false，改走網址分析或手動建立
