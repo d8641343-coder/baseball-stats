@@ -6,11 +6,13 @@ const PROXIES = [
 ];
 
 let netOK = null; // null=未測, true/false
-// 「就是棒」myscore.games 等成績網站基於隱私會把球員姓名中間字元遮蔽成 O（例：吳丞淏→吳O淏），
-// 2 字姓名沒有統一遮蔽慣例，不處理
-function maskMiddleName(name){
-  if(!name || name.length < 3) return null;
-  return name[0] + "O".repeat(name.length - 2) + name[name.length - 1];
+const SCOUT_WEB_DOMAINS = ["myscore.games"];   // AI 網路情蒐限定搜尋的網域（就是棒）
+// 「就是棒」myscore.games 等成績網站基於隱私會把球員姓名的「第二個字」遮蔽成 〇，不論 2/3/4 字姓名：
+// 吳丞淏→吳〇淏、胡X→胡〇、杜X奇翰→杜〇奇翰。回傳 〇 與英文 O 兩種寫法（兩者字形相近，搜尋時視為同一人）
+function maskNameVariants(name){
+  if(!name || name.length < 2) return null;
+  const rest = name.slice(2);
+  return [name[0] + "〇" + rest, name[0] + "O" + rest];
 }
 const SCOUT_JSON_SPEC = `只回傳 JSON，不要任何其他文字或 markdown，格式：
 {"found":true或false,"summary":"對手近況與打法風格，100字內","keyPlayers":[{"name":"姓名或背號","role":"投手或打者或其他","hand":"左或右或不明（投手指投、打者指打）","note":"需要留意的原因與特徵，40字內"}],"strategy":"我方應對建議，80字內","sources":"資料來源簡述，40字內"}
@@ -89,7 +91,8 @@ async function aiGate(feature){
 }
 
 // temperature 預設 0.2：情蒐/整理/判定類求穩、少腦補、JSON 格式輸出更聽話；賽後焦點小編文另傳 0.9 求活潑
-async function callClaude(prompt, useWeb, feature, temperature = 0.2){
+// webDomains：限定網路搜尋只在這些網域找（例 ["myscore.games"]），少搜無關頁面、省 token；省略則不限
+async function callClaude(prompt, useWeb, feature, temperature = 0.2, webDomains = null){
   if(!aiEnabled()) throw new Error("尚未設定 API Key");
   const model = aiConf.model || "claude-sonnet-4-6";
   // Haiku 只支援基本版網路搜尋工具；4.6+ 用含動態過濾的新版
@@ -104,7 +107,11 @@ async function callClaude(prompt, useWeb, feature, temperature = 0.2){
       if(/^claude-(haiku|sonnet)-4/.test(model)) body.temperature = temperature;
       // max_uses 封頂單次呼叫的搜尋輪數：每多搜一次就要把前面全部結果重送一次當 input，
       // 不設上限容易被沒查到精準資料時瘋狂換關鍵字搜到爆量 token
-      if(useWeb) body.tools = [{type:webTool, name:"web_search", max_uses:4}];
+      if(useWeb){
+        const tool = {type:webTool, name:"web_search", max_uses:4};
+        if(webDomains && webDomains.length) tool.allowed_domains = webDomains;
+        body.tools = [tool];
+      }
       const res = await fetch("https://api.anthropic.com/v1/messages", {
         method:"POST",
         headers:{
@@ -245,14 +252,17 @@ async function webSearchFallback(query, max, diag){
   }
   return [];
 }
-async function gatherScoutIntel(targets, league, hint, setStatus){
+async function gatherScoutIntel(targets, league, hint, setStatus, isPlayer){
   const main = targets[0];
   const queries = [];
-  queries.push(targets.join(" ") + " 棒球" + (league ? " " + league : ""));
+  // 優先用「就是棒」三個字查成績站；賽事欄已填「就是棒」就不重複加
+  const site = (league && league.includes("就是棒")) ? "" : " 就是棒";
+  queries.push(targets.join(" ") + site + " 棒球" + (league ? " " + league : ""));
   queries.push(main + " 棒球 新聞" + (hint ? " " + hint : ""));
-  if(targets[1]) queries.push(targets[1] + " 棒球" + (league ? " " + league : ""));
-  const maskedMain = maskMiddleName(main);   // 就是棒等網站可能把姓名中間字元遮蔽成 O，一併查遮蔽寫法
-  if(maskedMain) queries.push(maskedMain + " 棒球" + (league ? " " + league : ""));
+  if(targets[1]) queries.push(targets[1] + site + " 棒球" + (league ? " " + league : ""));
+  // 就是棒等網站會把選手姓名第二字遮蔽成 〇，一併查遮蔽寫法（僅選手模式；球隊名不遮蔽）
+  const maskedMain = isPlayer ? maskNameVariants(main) : null;
+  if(maskedMain) maskedMain.forEach(m => queries.push(m + site + " 棒球" + (league ? " " + league : "")));
   const seen = {}, results = [], diag = [];
   for(const q of queries){
     setStatus("搜尋中：" + q.slice(0, 18));
@@ -288,8 +298,8 @@ function buildScoutPrompt(){
   const who = mode === "player"
     ? `棒球選手「${player}」${opp?`（所屬球隊：${opp}）`:""}`
     : `棒球隊「${opp}」`;
-  const masked = mode === "player" ? maskMiddleName(player) : null;
-  const maskHint = masked ? `就是棒等網站基於隱私可能把姓名中間字元遮蔽成 O，此人可能顯示為「${masked}」，請也嘗試搜尋這個寫法並視為同一人。` : "";
+  const masked = mode === "player" ? maskNameVariants(player) : null;
+  const maskHint = masked ? `就是棒等網站基於隱私會把姓名的第二個字遮蔽成「〇」，此人可能顯示為「${masked[0]}」（或「${masked[1]}」），請也嘗試搜尋這些寫法並視為同一人。` : "";
   return `請幫我做賽前情蒐：請用網路搜尋公開資訊（就是棒 myscore.games、賽事官網、新聞報導），調查台灣的${who}${league?`，賽事/聯盟：${league}`:""}${hint?`，補充線索：${hint}`:""}。${maskHint}我的球隊是「親子勇士」，即將與其對戰。
 請整理：近況與風格、需要留意的指標球員（含左右投打）與原因、我方應對建議。
 最後請「只」輸出一個 JSON 程式碼區塊（不要其他文字），格式：
@@ -342,9 +352,9 @@ async function aiScout(){
   btn.disabled = true; setStatus("搜尋整理中…");
   document.getElementById("scOut").innerHTML = "";
   try{
-    const masked = mode === "player" ? maskMiddleName(player) : null;
+    const masked = mode === "player" ? maskNameVariants(player) : null;
     const maskHint = masked
-      ? `「就是棒」myscore.games 等成績網站基於隱私會把姓名中間字元遮蔽成 O，這位選手可能顯示為「${masked}」，請也嘗試用這個寫法搜尋，並視為同一人。`
+      ? `「就是棒」myscore.games 等成績網站基於隱私會把姓名的第二個字遮蔽成「〇」，這位選手可能顯示為「${masked[0]}」（或寫成「${masked[1]}」），請也嘗試用這些寫法搜尋，並視為同一人。`
       : "";
     const taskDesc = mode === "player"
       ? `調查台灣的棒球選手「${player}」${opp?`（所屬球隊：${opp}）`:""}。${maskHint}我方球隊「${state.teamName}」即將與這位選手對戰，請整理：角色（投手/打者）、左右投打、近期表現與特徵、需要留意的原因，以及我方應對建議。keyPlayers 以這位選手為主，同隊其他值得留意者可一併列入。`
@@ -352,13 +362,14 @@ async function aiScout(){
     let text = null;
     // 方案一：內建網路搜尋
     try{
-      text = await callClaude(`你是棒球隊的賽前情蒐分析師。請用網路搜尋公開資訊，包含聯盟/賽事成績網站（如「就是棒」）與新聞報導，最多搜尋 2~3 次、盡量一次下精準關鍵字，查不到就直接回報 found:false，不要一直換關鍵字重試。${league?`賽事/聯盟：${league}。`:""}${hint?`補充線索：${hint}。`:""}
+      // 搜尋限定在「就是棒」(myscore.games)：關鍵字用「${target} 就是棒」最準，查不到就回報 found:false，改走網址分析或手動建立
+      text = await callClaude(`你是棒球隊的賽前情蒐分析師。請用網路搜尋「就是棒」(myscore.games) 上的公開成績與球員資料，搜尋關鍵字以「${target} 就是棒」為主，最多搜尋 2~3 次、盡量一次下精準關鍵字，查不到就直接回報 found:false，不要一直換關鍵字重試。${league?`賽事/聯盟：${league}。`:""}${hint?`補充線索：${hint}。`:""}
 ${taskDesc}
-${SCOUT_JSON_SPEC}`, true, "scout");
+${SCOUT_JSON_SPEC}`, true, "scout", 0.2, SCOUT_WEB_DOMAINS);
     }catch(e1){
       if(e1.fatal) throw e1;   // Key/模型/參數錯誤：備援一樣會失敗，直接顯示原因
       // 方案二：自行搜尋後交給 AI 整理
-      const digest = await gatherScoutIntel(mode==="player" ? [player, opp].filter(Boolean) : [opp], league, hint, setStatus);
+      const digest = await gatherScoutIntel(mode==="player" ? [player, opp].filter(Boolean) : [opp], league, hint, setStatus, mode==="player");
       setStatus("AI 整理報告中…");
       text = await callClaude(`你是棒球隊的賽前情蒐分析師。以下是針對「${target}」的網路搜尋結果與頁面內容，只能依據這些內容整理，不可編造球員或數據；若內容與目標無關或不足，found 填 false 並說明。
 ${taskDesc}
