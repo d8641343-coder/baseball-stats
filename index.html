@@ -8,7 +8,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
-<link rel="stylesheet" href="css/style.css?v=1.20.2">
+<link rel="stylesheet" href="css/style.css?v=1.20.3">
 </head>
 <body>
 
@@ -210,11 +210,12 @@
       <div class="fld"><label>查詢對象</label><select id="scMode" onchange="scModeChange()"><option value="team">球隊</option><option value="player">選手</option></select></div>
       <div class="fld" id="scPlayerFld" style="display:none"><label>選手姓名</label><input id="scPlayer" placeholder="例：陳○○" style="width:110px"></div>
       <div class="fld"><label id="scOppLbl">對手隊名</label><input id="scOpp" placeholder="例：向上" style="width:130px"></div>
+      <div class="fld" style="flex:1;min-width:230px"><label>就是棒賽事頁網址（貼一次會記住）</label><input id="scMsUrl" placeholder="https://myscore.games/index.php?game_id=441" onchange="msUrlChange()"></div>
       <div class="fld"><label>賽事 / 聯盟（選填）</label><input id="scLeague" placeholder="例：就是棒、協會盃" style="width:130px"></div>
       <div class="fld" style="flex:1;min-width:180px"><label>補充線索（選填）</label><input id="scHint" placeholder="例：台北、U15、社會甲組"></div>
       <button class="btn gold" id="scBtn" onclick="aiScout()">🔍 開始情蒐</button>
     </div>
-    <div class="hint" style="margin-top:8px">AI 會同時搜尋聯盟成績網站與<b>新聞報導</b>；賽事欄留空則全網搜尋。網路上能查到的資訊依球隊而異，若查不到 AI 會如實回報，可改貼成績頁網址或手動建檔。</div>
+    <div class="hint" style="margin-top:8px"><b>最省、最準：</b>貼一次「就是棒賽事頁」網址（例：index.php?game_id=441，記在這台裝置），之後只要輸入<b>中文隊名</b>就會直接讀就是棒的球隊資料；選手模式請同時填「選手姓名」與「隊名」，會直接讀個人逐場成績。賽事裡找不到該隊時，才改用網路搜尋。<br>未貼賽事網址時：AI 會同時搜尋聯盟成績網站與<b>新聞報導</b>；賽事欄留空則全網搜尋。網路上能查到的資訊依球隊而異，若查不到 AI 會如實回報，可改貼成績頁網址或手動建檔。</div>
     <div id="scOut"></div>
     <div style="border-top:1px dashed var(--line);margin-top:14px;padding-top:12px">
       <div class="subhead" style="margin-top:0">📋 半自動情蒐（此環境連不上網時使用）</div>
@@ -235,10 +236,11 @@
     <p style="font-size:14px;margin-bottom:10px">已知對手在就是棒或其他網站的成績頁時，貼上網址，工具會讀取頁面內容交給 AI 整理成情蒐報告。</p>
     <div class="frow">
       <div class="fld" style="flex:1;min-width:220px"><label>成績頁網址</label><input id="scUrl" placeholder="https://..."></div>
-      <div class="fld"><label>對手隊名</label><input id="scUrlOpp" placeholder="例：向上" style="width:120px"></div>
+      <div class="fld"><label>對手隊名</label><input id="scUrlOpp" placeholder="就是棒網址可留空" style="width:130px"></div>
+      <div class="fld"><label>選手姓名（選填）</label><input id="scUrlPlayer" placeholder="例：吳丞淏" style="width:110px"></div>
       <button class="btn" id="scUrlBtn" onclick="urlScout()">讀取並分析</button>
     </div>
-    <div class="hint" style="margin-top:8px">透過 allorigins.win 代理讀取，部分網站可能擋代理讀不到；失敗時改用上方網路情蒐或手動建立。</div>
+    <div class="hint" style="margin-top:8px"><b>就是棒直連（最省 token、不經搜尋）：</b>貼<b>球隊頁</b>網址（team_detail.php?…game_id=…&amp;team_id=…）→ 整理全隊情蒐；再填「選手姓名」→ 自動找到該球員並讀取個人逐場成績（姓名填全名即可，會自動對應被遮蔽的 〇）。<br>注意：不要貼沒有帶參數的 record_player.php，那不是特定球員。<br>透過公開代理讀取，部分網站可能擋代理讀不到；失敗時改用上方網路情蒐或手動建立。</div>
     <div id="scUrlOut"></div>
   </div>
 
@@ -400,13 +402,13 @@
 <div id="pdfStage" style="position:absolute;left:-10000px;top:0;width:794px;background:#fff"></div>
 <div class="toast" id="toast"></div>
 
-<script src="js/firebase-config.js?v=1.20.2"></script>
-<script src="js/data.js?v=1.20.2"></script>
-<script src="js/auth.js?v=1.20.2"></script>
-<script src="js/batting.js?v=1.20.2"></script>
-<script src="js/pitching.js?v=1.20.2"></script>
-<script src="js/fielding.js?v=1.20.2"></script>
-<script src="js/scout.js?v=1.20.2"></script>
-<script src="js/ui.js?v=1.20.2"></script>
+<script src="js/firebase-config.js?v=1.20.3"></script>
+<script src="js/data.js?v=1.20.3"></script>
+<script src="js/auth.js?v=1.20.3"></script>
+<script src="js/batting.js?v=1.20.3"></script>
+<script src="js/pitching.js?v=1.20.3"></script>
+<script src="js/fielding.js?v=1.20.3"></script>
+<script src="js/scout.js?v=1.20.3"></script>
+<script src="js/ui.js?v=1.20.3"></script>
 </body>
 </html>

@@ -359,9 +359,27 @@ async function aiScout(){
     const taskDesc = mode === "player"
       ? `調查台灣的棒球選手「${player}」${opp?`（所屬球隊：${opp}）`:""}。${maskHint}我方球隊「${state.teamName}」即將與這位選手對戰，請整理：角色（投手/打者）、左右投打、近期表現與特徵、需要留意的原因，以及我方應對建議。keyPlayers 以這位選手為主，同隊其他值得留意者可一併列入。`
       : `調查台灣的棒球隊「${opp}」。我方球隊「${state.teamName}」即將與他們對戰，請整理：對手近況與打法風格、需要留意的指標球員（投手與打者）與原因、以及我方應對建議。`;
-    let text = null;
+    let text = null, directSrc = "";
+    // 方案零：已記住就是棒賽事 + 有隊名 → 直接讀球隊頁/個人頁（不搜尋，token 最省）
+    const msGid = msGidGet();
+    if(msGid && opp){
+      try{
+        setStatus("讀取就是棒…");
+        const team = await myscoreFindTeam(msGid, opp);
+        if(team){
+          const teamUrl = `${MS_ORIGIN}/team_detail.php?cate=&type=&game_id=${msGid}&team_id=${team.tid}`;
+          const m = await myscoreScout(teamUrl, parseMyscoreUrl(teamUrl), team.name, mode === "player" ? player : "");
+          setStatus("AI 整理報告中…");
+          text = await callClaude(m.prompt, false, "scout");
+          directSrc = m.srcUrl;
+        }
+      }catch(e0){
+        if(e0.fatal || e0.stop) throw e0;   // Key/模型錯誤，或隊名不明確/找不到球員：直接顯示原因
+        // 其他（代理連不上等）→ 往下改走網路搜尋
+      }
+    }
     // 方案一：內建網路搜尋
-    try{
+    if(text === null) try{
       // 搜尋限定在「就是棒」(myscore.games)：關鍵字用「${target} 就是棒」最準，查不到就回報 found:false，改走網址分析或手動建立
       text = await callClaude(`你是棒球隊的賽前情蒐分析師。請用網路搜尋「就是棒」(myscore.games) 上的公開成績與球員資料，搜尋關鍵字以「${target} 就是棒」為主，最多搜尋 2~3 次、盡量一次下精準關鍵字，查不到就直接回報 found:false，不要一直換關鍵字重試。${league?`賽事/聯盟：${league}。`:""}${hint?`補充線索：${hint}。`:""}
 ${taskDesc}
@@ -384,7 +402,7 @@ ${digest}`, false, "scout");
     }else{
       const sc = { id:uid(), opp: mode==="player" ? (opp || "選手："+player) : opp, source:"ai", created:Date.now(),
         summary:r.summary||"", keyPlayers:Array.isArray(r.keyPlayers)?r.keyPlayers:[],
-        strategy:r.strategy||"", sources:r.sources||"" };
+        strategy:r.strategy||"", sources:directSrc || r.sources||"" };
       document.getElementById("scOut").innerHTML = `<div class="scout-card">${scoutCardHTML(sc,false)}
         <div style="margin-top:10px"><button class="btn gold sm" onclick='saveScout(${JSON.stringify(JSON.stringify(sc))})'>存成情蒐報告</button></div>
         <div class="hint" style="margin-top:6px">提醒：網路情蒐內容請自行核對，存檔後可再手動增修指標人物。</div></div>`;
@@ -396,6 +414,122 @@ ${digest}`, false, "scout");
   }
   btn.disabled = false; btn.textContent = "🔍 開始情蒐";
 }
+/* ───────── 就是棒直連 ─────────
+   就是棒的「球隊頁」team_detail.php（文字約 3 千字：名單、賽程、全隊打擊/投球表）與
+   「個人頁」record_player.php?game_id=&player_id=&team_id=（逐場+總計，GET 即可）都是伺服器直出的 HTML，
+   不會被搜尋引擎收錄，網路搜尋找不到，所以直接用網址抓，不經搜尋、token 最省。
+   個人頁需要 player_id，藏在球隊頁每位球員名字的表單裡；用姓名（第二字遮蔽成 〇）對應。
+   沒帶參數的 record_player.php 會回 1.4MB 的預設頁，裡面沒有任何球員，不可直接使用。*/
+function parseMyscoreUrl(u){
+  try{
+    const x = new URL(u);
+    if(!/(^|\.)myscore\.games$/.test(x.hostname)) return null;
+    const q = k => x.searchParams.get(k) || "";
+    return { origin:x.origin, page:x.pathname.split("/").pop(), game_id:q("game_id"), team_id:q("team_id"), player_id:q("player_id") };
+  }catch(e){ return null; }
+}
+// 解析就是棒頁面：roster = 顯示姓名 → {gid,pid,tid}（來自球員名字表單）；text = 去除雜訊後的緊湊文字
+function myscoreParse(html){
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  const roster = {};
+  doc.querySelectorAll('form[action*="record_player"]').forEach(f=>{
+    const v = n => { const i = f.querySelector(`input[name="${n}"]`); return i ? i.value : ""; };
+    const name = f.textContent.trim();
+    if(name && v("player_id") && !roster[name]) roster[name] = { gid:v("game_id"), pid:v("player_id"), tid:v("team_id") };
+  });
+  doc.querySelectorAll("script,style,noscript,iframe,nav,footer").forEach(el=>el.remove());
+  if(doc.body){
+    const w = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT);
+    for(let n = w.nextNode(); n; n = w.nextNode()) n.nodeValue = n.nodeValue.replace(/\s+/g, " ");
+    // 表格儲存格在原始碼裡常沒有空白（數字會黏成一串），補上分隔再取文字
+    doc.body.querySelectorAll("td,th").forEach(el=>el.append(" "));
+    doc.body.querySelectorAll("tr,h1,h2,h3,h4,p,br,li").forEach(el=>el.append("\n"));
+  }
+  const text = (doc.body ? doc.body.textContent : "").replace(/ *\n */g, "\n").replace(/\n{2,}/g, "\n").replace(/[ \t]{2,}/g, " ").trim();
+  return { title:(doc.title||"").trim(), roster, text };
+}
+// 用姓名找球員：比對時略過第二字（遮蔽字元可能是 〇 / O），輸入全名或遮蔽名皆可
+function myscoreFindPlayer(roster, name){
+  const key = s => s.length >= 2 ? s[0] + s.slice(2) : s;
+  const names = Object.keys(roster);
+  if(roster[name]) return [name];
+  return names.filter(n => key(n) === key(name));
+}
+/* 只輸入中文隊名就能查：賽事頁 index.php?game_id=N 的「球隊」表列出該賽事所有隊伍與 team_id。
+   賽事（game_id）貼一次網址就記在這台裝置，之後只要打隊名。找不到時回傳 null（改走網路搜尋）。*/
+const MS_ORIGIN = "https://myscore.games";
+const MS_GID_KEY = "scoutMsGid";
+function msGidGet(){ try{ return localStorage.getItem(MS_GID_KEY) || ""; }catch(e){ return ""; } }
+function msGidSet(v){ try{ if(v) localStorage.setItem(MS_GID_KEY, v); else localStorage.removeItem(MS_GID_KEY); }catch(e){} }
+function msUrlChange(){
+  const v = document.getElementById("scMsUrl").value.trim();
+  if(!v){ msGidSet(""); return toast("已清除記住的就是棒賽事"); }
+  const ms = parseMyscoreUrl(v);
+  if(!ms || !ms.game_id) return toast("請貼就是棒賽事頁網址（要有 game_id），例：https://myscore.games/index.php?game_id=441");
+  msGidSet(ms.game_id);
+  toast(`已記住就是棒賽事（game_id ${ms.game_id}），之後只要輸入隊名即可`);
+}
+function msUrlInit(){
+  const el = document.getElementById("scMsUrl"), g = msGidGet();
+  if(el && g && !el.value) el.value = `${MS_ORIGIN}/index.php?game_id=${g}`;
+}
+msUrlInit();
+const msStopErr = m => { const e = new Error(m); e.stop = true; return e; };   // 使用者可處理的錯誤：直接顯示，不要再花錢搜尋
+async function myscoreFindTeam(gid, name){
+  const html = await proxyFetchText(`${MS_ORIGIN}/index.php?game_id=${gid}`);
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  const teams = {};   // 隊名 → team_id
+  doc.querySelectorAll('a[href*="team_detail.php"]').forEach(a=>{
+    const m = (a.getAttribute("href")||"").match(/team_id=(\d+)/);
+    if(!m) return;
+    const tr = a.closest("tr");
+    const txt = a.textContent.trim();
+    const nm = txt === "連結" && tr && tr.firstElementChild ? tr.firstElementChild.textContent.trim() : txt;
+    if(nm && !teams[nm]) teams[nm] = m[1];
+  });
+  const norm = s => s.replace(/[()（）\s]/g, "").toLowerCase();
+  const q = norm(name), names = Object.keys(teams);
+  if(!names.length) return null;
+  let hits = names.filter(n => norm(n) === q);
+  if(!hits.length) hits = names.filter(n => q.length >= 2 && (norm(n).includes(q) || q.includes(norm(n))));
+  if(hits.length > 1) throw msStopErr(`這個賽事裡有多支符合「${name}」的隊伍：${hits.join("、")}。請輸入完整隊名（含括號）`);
+  return hits.length ? { name:hits[0], tid:teams[hits[0]] } : null;
+}
+async function myscoreScout(url, ms, oppInput, playerInput){
+  const fetchParse = async u => myscoreParse(await proxyFetchText(u));
+  // 1) 決定要讀的個人頁（若有指定選手）；2) 否則整理球隊頁
+  if(ms.page === "record_player.php" && !ms.player_id){
+    throw msStopErr("這個網址沒有指定球員（缺 player_id），就是棒會回傳無關的整站頁面。請改貼「球隊頁」網址（team_detail.php?...game_id=...&team_id=...）並填選手姓名");
+  }
+  if(ms.page === "team_detail.php" && !ms.team_id) throw msStopErr("球隊頁網址缺少 team_id，請從就是棒球隊頁複製完整網址");
+  const base = await fetchParse(url);
+  const teamName = (base.title.split(/\s+球隊紀錄|\s*-\s*/)[0] || "").trim();
+  let who, body, srcUrl = url;
+  if(playerInput || ms.player_id){
+    let pageUrl = url, pname = playerInput;
+    if(!ms.player_id){
+      const hits = myscoreFindPlayer(base.roster, playerInput);
+      if(!hits.length) throw msStopErr(`球隊頁名單找不到「${playerInput}」。名單：${Object.keys(base.roster).join("、")}`);
+      if(hits.length > 1) throw msStopErr(`「${playerInput}」符合多位：${hits.join("、")}，請輸入更完整的姓名`);
+      const h = base.roster[hits[0]];
+      pname = hits[0];
+      pageUrl = `${ms.origin}/record_player.php?game_id=${h.gid}&player_id=${h.pid}&team_id=${h.tid}`;
+      srcUrl = pageUrl;
+    }
+    const pp = ms.player_id ? base : await fetchParse(pageUrl);
+    who = `選手「${pname || "（網址指定）"}」（所屬球隊：${oppInput || teamName || "不明"}）`;
+    body = `【個人頁：逐場成績與總計】\n${pp.text.slice(0, 7000)}` + (ms.player_id ? "" : `\n\n【所屬球隊頁（名單、全隊表現，供參考）】\n${base.text.slice(0, 3500)}`);
+  }else{
+    who = `球隊「${oppInput || teamName || "不明"}」`;
+    body = `【球隊頁：名單、賽程結果、全隊打擊/投球表】\n${base.text.slice(0, 7000)}`;
+  }
+  const prompt = `以下是「就是棒」(myscore.games) 網站擷取的內容（姓名第二字會被遮蔽成「〇」，屬正常現象，請沿用頁面上的寫法）。請整理台灣棒球${who}的賽前情蒐：近況與風格、需要留意的指標球員（投手/打者，須引用頁面上的實際數字）與原因、我方應對建議。只依據內容，不可編造；${playerInput || ms.player_id ? "keyPlayers 以這位選手為主" : "keyPlayers 挑 2~4 位最需留意者"}。
+${SCOUT_JSON_SPEC}
+【網頁內容開始】
+${body}
+【網頁內容結束】`;
+  return { prompt, opp: oppInput || teamName || (playerInput ? "選手：" + playerInput : "就是棒"), srcUrl };
+}
 async function urlScout(){
   if(netOK === false){
     document.getElementById("scUrlOut").innerHTML = `<div class="ai-out">⚠️ 目前連不上外部代理服務，無法讀取外部網頁，已為你略過呼叫。
@@ -403,21 +537,32 @@ async function urlScout(){
     return;
   }
   const url = document.getElementById("scUrl").value.trim();
-  const opp = document.getElementById("scUrlOpp").value.trim();
+  let opp = document.getElementById("scUrlOpp").value.trim();
+  const playerEl = document.getElementById("scUrlPlayer");
+  const player = playerEl ? playerEl.value.trim() : "";
   if(!/^https?:\/\//i.test(url)) return toast("請輸入 http/https 開頭的網址");
-  if(!opp) return toast("請輸入對手隊名");
+  const ms = parseMyscoreUrl(url);
+  const msDirect = ms && (ms.page === "team_detail.php" || ms.page === "record_player.php");
+  if(!opp && !msDirect) return toast("請輸入對手隊名");   // 就是棒球隊頁/個人頁可從頁面取得隊名
   if(!await aiGate("urlscout")) return;
   const btn = document.getElementById("scUrlBtn");
   btn.disabled = true; btn.innerHTML = `<span class="spinner"></span>讀取分析中…`;
   document.getElementById("scUrlOut").innerHTML = "";
   try{
-    const pageText = stripHtmlToText(await proxyFetchText(url), 9000);
-    if(pageText.length < 50) throw new Error("頁面內容過少或無法讀取");
-    const prompt = `以下是從網頁（${url}）擷取的文字內容，請從中整理台灣棒球隊「${opp}」的賽前情蒐：近況與風格、需要留意的指標球員（投手/打者）與原因、我方應對建議。只依據頁面內容，不可編造。
+    let prompt, srcUrl = url;
+    if(msDirect){
+      const m = await myscoreScout(url, ms, opp, player);
+      prompt = m.prompt; srcUrl = m.srcUrl;
+      if(!opp) opp = m.opp;
+    }else{
+      const pageText = stripHtmlToText(await proxyFetchText(url), 9000);
+      if(pageText.length < 50) throw new Error("頁面內容過少或無法讀取");
+      prompt = `以下是從網頁（${url}）擷取的文字內容，請從中整理台灣棒球隊「${opp}」的賽前情蒐：近況與風格、需要留意的指標球員（投手/打者）與原因、我方應對建議。只依據頁面內容，不可編造。
 ${SCOUT_JSON_SPEC}
 【網頁內容開始】
 ${pageText}
 【網頁內容結束】`;
+    }
     const text = await callClaude(prompt, false, "urlscout");
     const r = parseAIJson(text);
     if(!r.found){
@@ -425,7 +570,7 @@ ${pageText}
     }else{
       const sc = { id:uid(), opp, source:"url", created:Date.now(),
         summary:r.summary||"", keyPlayers:Array.isArray(r.keyPlayers)?r.keyPlayers:[],
-        strategy:r.strategy||"", sources:url };
+        strategy:r.strategy||"", sources:srcUrl };
       document.getElementById("scUrlOut").innerHTML = `<div class="scout-card">${scoutCardHTML(sc,false)}
         <div style="margin-top:10px"><button class="btn gold sm" onclick='saveScout(${JSON.stringify(JSON.stringify(sc))})'>存成情蒐報告</button></div></div>`;
     }
