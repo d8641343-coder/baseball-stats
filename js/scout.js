@@ -1,4 +1,7 @@
+// jina-html：r.jina.ai 加 X-Return-Format: html 會回完整原始 HTML（表單、連結都保留），且允許跨網域；
+// 其餘公開代理常掛（allorigins 522、corsproxy 要 key），放後面當備援。就是棒本身不給 CORS，一定要靠代理。
 const PROXIES = [
+  { name:"jina-html", make:u=>"https://r.jina.ai/"+u, kind:"text", headers:{"X-Return-Format":"html"} },
   { name:"allorigins", make:u=>"https://api.allorigins.win/raw?url="+encodeURIComponent(u), kind:"text" },
   { name:"allorigins2", make:u=>"https://api.allorigins.win/get?url="+encodeURIComponent(u), kind:"json" },
   { name:"corsproxy", make:u=>"https://corsproxy.io/?url="+encodeURIComponent(u), kind:"text" },
@@ -174,7 +177,11 @@ async function probeNet(){
 async function proxyFetchText(url, diag){
   for(const p of PROXIES){
     try{
-      const res = await fetch(p.make(url));
+      // 逾時 12 秒就換下一個代理（掛掉的代理可能卡 20 秒以上）
+      const opt = {};
+      if(p.headers) opt.headers = p.headers;
+      if(AbortSignal.timeout) opt.signal = AbortSignal.timeout(12000);
+      const res = await fetch(p.make(url), opt);
       if(!res.ok) throw new Error("HTTP "+res.status);
       let text;
       if(p.kind === "json"){ const j = await res.json(); text = j.contents || ""; }
@@ -359,7 +366,7 @@ async function aiScout(){
     const taskDesc = mode === "player"
       ? `調查台灣的棒球選手「${player}」${opp?`（所屬球隊：${opp}）`:""}。${maskHint}我方球隊「${state.teamName}」即將與這位選手對戰，請整理：角色（投手/打者）、左右投打、近期表現與特徵、需要留意的原因，以及我方應對建議。keyPlayers 以這位選手為主，同隊其他值得留意者可一併列入。`
       : `調查台灣的棒球隊「${opp}」。我方球隊「${state.teamName}」即將與他們對戰，請整理：對手近況與打法風格、需要留意的指標球員（投手與打者）與原因、以及我方應對建議。`;
-    let text = null, directSrc = "";
+    let text = null, directSrc = "", directNote = "";
     // 方案零：已記住就是棒賽事 + 有隊名 → 直接讀球隊頁/個人頁（不搜尋，token 最省）
     const msGid = msGidGet();
     if(msGid && opp){
@@ -372,10 +379,13 @@ async function aiScout(){
           setStatus("AI 整理報告中…");
           text = await callClaude(m.prompt, false, "scout");
           directSrc = m.srcUrl;
+        }else{
+          directNote = `就是棒賽事（game_id ${msGid}）裡找不到「${opp}」，已改用網路搜尋（資料可能來自其他賽季）。若對手在別的賽事，請更新上方賽事網址。`;
         }
       }catch(e0){
         if(e0.fatal || e0.stop) throw e0;   // Key/模型錯誤，或隊名不明確/找不到球員：直接顯示原因
-        // 其他（代理連不上等）→ 往下改走網路搜尋
+        // 其他（代理連不上等）→ 改走網路搜尋，並把原因告訴使用者（避免默默退回而不知道）
+        directNote = `就是棒直連失敗（${e0.message || "連線錯誤"}），已改用網路搜尋。`;
       }
     }
     // 方案一：內建網路搜尋
@@ -405,7 +415,8 @@ ${digest}`, false, "scout");
         strategy:r.strategy||"", sources:directSrc || r.sources||"" };
       document.getElementById("scOut").innerHTML = `<div class="scout-card">${scoutCardHTML(sc,false)}
         <div style="margin-top:10px"><button class="btn gold sm" onclick='saveScout(${JSON.stringify(JSON.stringify(sc))})'>存成情蒐報告</button></div>
-        <div class="hint" style="margin-top:6px">提醒：網路情蒐內容請自行核對，存檔後可再手動增修指標人物。</div></div>`;
+        <div class="hint" style="margin-top:6px">${directSrc ? "✅ 資料直接來自就是棒球隊頁（非網路搜尋）。" : "提醒：網路情蒐內容請自行核對，存檔後可再手動增修指標人物。"}</div>
+        ${directNote ? `<div class="hint" style="margin-top:4px;color:#b45309">⚠️ ${esc(directNote)}</div>` : ""}</div>`;
     }
   }catch(e){
     console.error(e);
