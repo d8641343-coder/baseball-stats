@@ -1,5 +1,6 @@
 let charts = {};
 let currentPid = null;
+let profTab = "all";   // 個人頁成績分頁："all"＝生涯合計，或某階級；關閉個人頁即重置
 
 /* ───────── 表格排序（點 th 標題） ───────── */
 let sortState = { bat:{key:"OPS",dir:-1}, pit:{key:"ERA",dir:1}, roster:{key:null,dir:1} };
@@ -299,15 +300,19 @@ function renderOverview(){
     <div class="card"><div class="v">${f2(pit.WHIP)}</div><div class="k">球隊 WHIP</div>${full?cmp(pit.WHIP,full.pit.WHIP,f2,true):""}</div>`;
   renderOvTrend(games);
   const agg = battingAgg(games);
-  const rows = Object.entries(agg).filter(([,m])=>m.AB>0)
-    .sort((a,b)=> (b[1].OPS||0)-(a[1].OPS||0)).slice(0,10)
-    .map(([pid,m],i)=>`<tr><td class="num">${i+1}</td><td class="l">${avatarHTML(getP(pid))} ${nameLink(pid)}</td>
+  const ovAll = Object.entries(agg).filter(([pid,m])=>m.AB>0 && getP(pid))
+    .sort((a,b)=> (b[1].OPS||0)-(a[1].OPS||0));
+  const ovHasOut = ovAll.some(([pid])=>isOutOfLevel(getP(pid)));
+  const ovActive = ovAll.filter(([pid])=>!isOutOfLevel(getP(pid))).slice(0,10);
+  const ovOut = showPromoted ? ovAll.filter(([pid])=>isOutOfLevel(getP(pid))) : [];
+  const rows = ovActive.concat(ovOut)
+    .map(([pid,m],i)=>`<tr${isOutOfLevel(getP(pid))?' style="opacity:.55"':""}><td class="num">${isOutOfLevel(getP(pid))?"-":i+1}</td><td class="l">${avatarHTML(getP(pid))} ${nameLink(pid)}${promoTag(getP(pid))}</td>
       <td class="num">${m.gp}</td><td class="num">${m.AB}</td><td class="num">${m.H}</td>
       <td class="num">${f3(m.AVG)}</td><td class="num">${f3(m.OBP)}</td><td class="num">${f3(m.SLG)}</td>
       <td class="num"><b>${f3(m.OPS)}</b></td></tr>`).join("");
   document.getElementById("ovLeaders").innerHTML = rows ?
-    `<table><thead><tr><th>#</th><th class="l">球員</th><th>場次</th><th>打數</th><th>安打</th><th>打擊率</th><th>上壘率</th><th>長打率</th><th>OPS</th></tr></thead><tbody>${rows}</tbody></table>`
-    : `<div class="empty" style="border:none">此區間尚無打擊數據。</div>`;
+    promoToggleHTML(ovHasOut)+`<table><thead><tr><th>#</th><th class="l">球員</th><th>場次</th><th>打數</th><th>安打</th><th>打擊率</th><th>上壘率</th><th>長打率</th><th>OPS</th></tr></thead><tbody>${rows}</tbody></table>`
+    : promoToggleHTML(ovHasOut)+`<div class="empty" style="border:none">此區間尚無打擊數據。</div>`;
   // 教練戰績
   const cmap = {};
   games.forEach(g=>{
@@ -337,29 +342,33 @@ const ROSTER_GETTERS = {
   mvp:r=>r.c.mvp||0
 };
 function renderRoster(){
-  const allG = sortedGames();
+  // 成績只算所選階級的比賽（與打擊／投球頁一致），球員轉階級後舊階級成績不會帶到新階級
+  const allG = sortedGames().filter(g => lvl==="all" || (g.level||"U12")===lvl);
   const bat = battingAgg(allG), pit = pitchingAgg(allG);
-  const list = state.players.filter(p => lvl==="all" || (p.level||"U12")===lvl);
+  const inLvl = p => (p.level||"U12")===lvl;
+  const hasOut = lvl!=="all" && state.players.some(p=>!inLvl(p) && (bat[p.id]||pit[p.id]));
+  const list = state.players.filter(p => lvl==="all" || inLvl(p) || (showPromoted && (bat[p.id]||pit[p.id])));
   const base = list.map(p=>({p, b:bat[p.id], pi:pit[p.id], c:mvpCounts(p.id)}));
-  const sorted = sortRows(base, "roster", ROSTER_GETTERS);
+  const sorted = promoFilter(sortRows(base, "roster", ROSTER_GETTERS), r=>r.p);
   const rows = sorted.map(({p,b,pi,c})=>{
-    return `<tr><td>${avatarHTML(p)}</td><td class="num">${esc(p.num)||"-"}</td>
-      <td class="l">${nameLink(p.id)}${p.pos?`<span class="pos-badge">${esc(p.pos)}</span>`:""}${lvlBadge(p.level)}${handBadge(p)}</td>
+    return `<tr${isOutOfLevel(p)?' style="opacity:.55"':""}><td>${avatarHTML(p)}</td><td class="num">${esc(p.num)||"-"}</td>
+      <td class="l">${nameLink(p.id)}${p.pos?`<span class="pos-badge">${esc(p.pos)}</span>`:""}${lvlBadge(p.level)}${handBadge(p)}${promoTag(p)}</td>
       <td class="num">${b?b.gp:0} / ${pi?pi.gp:0}</td>
       <td class="num">${b?f3(b.AVG):"-"}</td><td class="num">${pi?f2(pi.ERA):"-"}</td>
       <td class="num">${c.mvp?("⭐"+c.mvp):"-"}</td>
       <td><button class="del" onclick="delPlayer('${p.id}')" title="移除">✕</button></td></tr>`;
   }).join("");
-  document.getElementById("rosterTable").innerHTML = rows ?
+  document.getElementById("rosterTable").innerHTML = promoToggleHTML(hasOut) + (rows ?
     `<div class="tblwrap"><table><thead><tr><th></th>${th_("roster","num","背號")}${th_("roster","name","球員（點姓名看歷程）","l")}${th_("roster","gp","打擊/投球 場次")}${th_("roster","AVG","打擊率")}${th_("roster","ERA","防禦率")}${th_("roster","mvp","單場MVP")}<th></th></tr></thead><tbody>${rows}</tbody></table></div>`
-    : `<div class="empty">此階級名單是空的，先加入球員或用「匯入資料」。</div>`;
+    : `<div class="empty">此階級名單是空的，先加入球員或用「匯入資料」。</div>`);
 }
 
 /* ───────── 比賽 ───────── */
 function playerOptions(sel, level){
-  const list = state.players.filter(p => !level || level==="其他" || (p.level||"U12")===level || true);
+  // 不剔除其他階級球員（可能跨階級支援），但該比賽階級的現役球員排前面
+  const rank = p => (p.level||"U12")===(level||"U12") ? 0 : 1;
   return `<option value="">— 選擇球員 —</option>` + state.players
-    .slice().sort((a,b)=> ((a.level||"") === (level||"") ? -1 : 0))
+    .slice().sort((a,b)=> rank(a)-rank(b))
     .map(p=>`<option value="${p.id}" ${p.id===sel?"selected":""}>${esc(p.num?p.num+" ":"")}${esc(p.name)}（${esc(p.level||"U12")}）</option>`).join("");
 }
 function toggleGame(id){ const el=document.getElementById("gc-"+id); if(!el) return; if(openGames.has(id)){ openGames.delete(id); el.classList.remove("open"); } else { openGames.add(id); el.classList.add("open"); } }
@@ -540,16 +549,18 @@ const BAT_GETTERS = {
 function renderBatting(){
   const games = windowGames(win.batting);
   const agg = battingAgg(games);
-  const base = state.players.filter(p=>agg[p.id]).map(p=>({p, m:agg[p.id]}));
-  if(!base.length){ document.getElementById("batTable").innerHTML = `<div class="empty">此範圍（${esc(scopeLabel())}）與區間尚無打擊數據。</div>`; document.getElementById("batSplit").innerHTML = ""; if(charts.chartBat){charts.chartBat.destroy();delete charts.chartBat;} return; }
-  const rows = sortRows(base, "bat", BAT_GETTERS);
+  const all = state.players.filter(p=>agg[p.id]).map(p=>({p, m:agg[p.id]}));
+  const hasOut = all.some(r=>isOutOfLevel(r.p));
+  const base = promoFilter(all, r=>r.p);
+  if(!base.length){ document.getElementById("batTable").innerHTML = promoToggleHTML(hasOut)+`<div class="empty">此範圍（${esc(scopeLabel())}）與區間尚無打擊數據。</div>`; document.getElementById("batSplit").innerHTML = ""; if(charts.chartBat){charts.chartBat.destroy();delete charts.chartBat;} return; }
+  const rows = promoFilter(sortRows(base, "bat", BAT_GETTERS), r=>r.p);
   const tot = sumBat(agg);
-  const html = rows.map(({p,m})=>`<tr><td class="l">${avatarHTML(p)} ${nameLink(p.id)}</td>
+  const html = rows.map(({p,m})=>`<tr${isOutOfLevel(p)?' style="opacity:.55"':""}><td class="l">${avatarHTML(p)} ${nameLink(p.id)}${promoTag(p)}</td>
     <td class="num">${m.gp}</td><td class="num">${m.PA}</td><td class="num">${m.AB}</td><td class="num">${m.H}</td>
     <td class="num">${m.d2}</td><td class="num">${m.d3}</td><td class="num">${m.HR}</td><td class="num">${m.BB}</td>
     <td class="num">${m.R}</td><td class="num">${m.RBI}</td><td class="num">${m.SO}</td><td class="num">${m.SB}</td>
     <td class="num">${f3(m.AVG)}</td><td class="num">${f3(m.OBP)}</td><td class="num">${f3(m.SLG)}</td><td class="num"><b>${f3(m.OPS)}</b></td></tr>`).join("");
-  document.getElementById("batTable").innerHTML = `<div class="tblwrap"><table>
+  document.getElementById("batTable").innerHTML = promoToggleHTML(hasOut)+`<div class="tblwrap"><table>
     <thead><tr>${th_("bat","name","球員","l")}${th_("bat","gp","場次")}${th_("bat","PA","打席")}${th_("bat","AB","打數")}${th_("bat","H","安打")}${th_("bat","d2","二安")}${th_("bat","d3","三安")}${th_("bat","HR","全壘打")}${th_("bat","BB","四死")}${th_("bat","R","得分")}${th_("bat","RBI","打點")}${th_("bat","SO","三振")}${th_("bat","SB","盜壘")}${th_("bat","AVG","打擊率")}${th_("bat","OBP","上壘率")}${th_("bat","SLG","長打率")}${th_("bat","OPS","OPS")}</tr></thead>
     <tbody>${html}<tr class="total"><td class="l">球隊合計</td><td class="num">${games.length}</td><td class="num">${tot.PA}</td><td class="num">${tot.AB}</td><td class="num">${tot.H}</td><td class="num">${tot.d2}</td><td class="num">${tot.d3}</td><td class="num">${tot.HR}</td><td class="num">${tot.BB}</td><td class="num">${tot.R}</td><td class="num">${tot.RBI}</td><td class="num">${tot.SO}</td><td class="num">${tot.SB}</td><td class="num">${f3(tot.AVG)}</td><td class="num">${f3(tot.OBP)}</td><td class="num">${f3(tot.SLG)}</td><td class="num">${f3(tot.OPS)}</td></tr></tbody></table></div>`;
   const chartBox = document.getElementById("chartBatBox");
@@ -588,28 +599,40 @@ function renderPitching(){
   if(e1){ e1.value=String(eb.U12||6); e2.value=String(eb.U15||7); if(e4) e4.value=String(eb.U18||7); if(e5) e5.value=String(eb.OB||9); e3.value=String(eb["其他"]||9); }
   const games = windowGames(win.pitching);
   const agg = pitchingAgg(games);
-  const base = state.players.filter(p=>agg[p.id]).map(p=>({p, m:agg[p.id]}));
-  if(!base.length){ document.getElementById("pitTable").innerHTML = `<div class="empty">此範圍（${esc(scopeLabel())}）與區間尚無投球數據。</div>`; return; }
-  const rows = sortRows(base, "pit", PIT_GETTERS);
+  const all = state.players.filter(p=>agg[p.id]).map(p=>({p, m:agg[p.id]}));
+  const hasOut = all.some(r=>isOutOfLevel(r.p));
+  const base = promoFilter(all, r=>r.p);
+  if(!base.length){ document.getElementById("pitTable").innerHTML = promoToggleHTML(hasOut)+`<div class="empty">此範圍（${esc(scopeLabel())}）與區間尚無投球數據。</div>`; return; }
+  const rows = promoFilter(sortRows(base, "pit", PIT_GETTERS), r=>r.p);
   const tot = sumPit(agg);
-  const html = rows.map(({p,m})=>`<tr><td class="l">${avatarHTML(p)} ${nameLink(p.id)}</td>
+  const html = rows.map(({p,m})=>`<tr${isOutOfLevel(p)?' style="opacity:.55"':""}><td class="l">${avatarHTML(p)} ${nameLink(p.id)}${promoTag(p)}</td>
     <td class="num">${m.gp}</td><td class="num">${m.GS||0}</td><td class="num">${ipStr(m.outs)}</td><td class="num">${m.H}</td>
     <td class="num">${m.R}</td><td class="num">${m.ER}</td><td class="num">${m.BB}</td><td class="num">${m.SO}</td>
     <td class="num"><b>${m.ERA===Infinity?"INF":f2(m.ERA)}</b></td><td class="num">${f2(m.WHIP)}</td>
     <td class="num">${f2(m.K9)}</td><td class="num">${f2(m.BB9)}</td>
     <td class="num">${m.GOAO===Infinity?"全滾地":f2(m.GOAO)}</td>
     <td class="num">${m.NP||"-"}</td><td class="num">${fpct(m.SPCT)}</td><td class="num">${f2(m.PPI)}</td></tr>`).join("");
-  document.getElementById("pitTable").innerHTML = `<div class="tblwrap"><table>
+  document.getElementById("pitTable").innerHTML = promoToggleHTML(hasOut)+`<div class="tblwrap"><table>
     <thead><tr>${th_("pit","name","球員","l")}${th_("pit","gp","場次")}${th_("pit","GS","先發")}${th_("pit","outs","局數")}${th_("pit","H","被安打")}${th_("pit","R","失分")}${th_("pit","ER","自責分")}${th_("pit","BB","四死")}${th_("pit","SO","三振")}${th_("pit","ERA","防禦率")}${th_("pit","WHIP","WHIP")}${th_("pit","K9","K/9")}${th_("pit","BB9","BB/9")}${th_("pit","GOAO","滾飛比")}${th_("pit","NP","用球數")}${th_("pit","SPCT","好球率")}${th_("pit","PPI","每局用球")}</tr></thead>
     <tbody>${html}<tr class="total"><td class="l">球隊合計</td><td class="num">${games.length}</td><td class="num">${tot.GS||0}</td><td class="num">${ipStr(tot.outs)}</td><td class="num">${tot.H}</td><td class="num">${tot.R}</td><td class="num">${tot.ER}</td><td class="num">${tot.BB}</td><td class="num">${tot.SO}</td><td class="num">${f2(tot.ERA)}</td><td class="num">${f2(tot.WHIP)}</td><td class="num">${f2(tot.K9)}</td><td class="num">${f2(tot.BB9)}</td><td class="num">${tot.GOAO===Infinity?"全滾地":f2(tot.GOAO)}</td><td class="num">${tot.NP||"-"}</td><td class="num">${fpct(tot.SPCT)}</td><td class="num">-</td></tr></tbody></table></div>
     <div class="hint">防禦率依各場比賽的階級局制換算（U12 ${ (state.eraBases||{}).U12||6 } 局、U15 ${ (state.eraBases||{}).U15||7 } 局、U18 ${ (state.eraBases||{}).U18||7 } 局、OB ${ (state.eraBases||{}).OB||9 } 局、其他 ${ (state.eraBases||{})["其他"]||9 } 局）；K/9、BB/9 固定以每 9 局換算；滾飛比＝滾地出局 ÷ 飛球出局，越高代表越會製造滾地球；用球數＝好球＋壞球，好球率＝好球 ÷ 用球數，每局用球＝用球數 ÷ 局數（僅列個別投手，未登錄好壞球者顯示 -）。</div>`;
 }
 
 /* ───────── 個人歷程 ───────── */
-function openProfile(pid){
+function openProfile(pid, tabLvl){
+  const sameProfile = currentPid===pid;
   currentPid = pid;
   const p = getP(pid); if(!p) return;
-  const allG = sortedGames();
+  const fullG = sortedGames();
+  const playedLvls = LEVELS.filter(l => fullG.some(g => (g.level||"U12")===l && ((g.batting||[]).some(x=>x.pid===pid) || (g.pitching||[]).some(x=>x.pid===pid))));
+  // 成績分頁：點選優先；重繪同一人沿用上次；否則跨階級者預設目前階級，其餘看生涯
+  let tab = tabLvl!==undefined ? tabLvl : sameProfile ? profTab : (playedLvls.length>1 && playedLvls.includes(p.level||"U12") ? (p.level||"U12") : "all");
+  if(tab!=="all" && !playedLvls.includes(tab)) tab = "all";
+  profTab = tab;
+  const allG = tab==="all" ? fullG : fullG.filter(g => (g.level||"U12")===tab);
+  const tabLabel = tab==="all" ? "生涯" : tab;
+  const tabsHTML = playedLvls.length>1 ? `<div class="frow" style="margin:8px 0">${["all",...playedLvls].map(t=>`<button class="btn sm ${t===tab?"gold":"ghost"}" onclick="openProfile('${pid}','${t}')">${t==="all"?"生涯合計":t}</button>`).join("")}</div>` : "";
+  const hist = p.levelHistory && p.levelHistory.length>1 ? `<div class="hint">階級歷程：${p.levelHistory.map(h=>esc(h.level)+(h.from?`（${esc(h.from)}）`:"")).join(" → ")}</div>` : "";
   const myG = allG.filter(g => (g.batting||[]).some(l=>l.pid===pid) || (g.pitching||[]).some(l=>l.pid===pid));
   const bat = battingAgg(allG)[pid], pit = pitchingAgg(allG)[pid];
   const last5 = myG.slice(-5);
@@ -672,7 +695,8 @@ function openProfile(pid){
       ${avatarHTML(p, true)}
       <div>
         <h3>${esc(p.name)} <span style="font-family:var(--mono);color:var(--gold)">#${esc(p.num)||"-"}</span></h3>
-        <div class="meta">${esc(p.level||"U12")}${p.pos?` · ${esc(p.pos)}`:""}${p.throws?` · ${esc(p.throws)}投`:""}${p.bats?` · ${p.bats==="兩"?"左右開弓":esc(p.bats)+"打"}`:""} · 出賽 ${myG.length} 場</div>
+        <div class="meta">${esc(p.level||"U12")}${p.pos?` · ${esc(p.pos)}`:""}${p.throws?` · ${esc(p.throws)}投`:""}${p.bats?` · ${p.bats==="兩"?"左右開弓":esc(p.bats)+"打"}`:""} · ${tabLabel}出賽 ${myG.length} 場</div>
+        ${hist}
       </div>
       <button class="modal-close" onclick="closeProfile()">關閉 ✕</button>
     </div>
@@ -682,11 +706,13 @@ function openProfile(pid){
         <label class="btn sm ghost edit-only" style="display:inline-flex;align-items:center">📷 上傳大頭照<input type="file" accept="image/*,.heic,.heif" style="display:none" onchange="uploadAvatarFor(this,'${pid}')"></label>
         <button class="btn sm ghost edit-only" onclick="editPhoto('${pid}')">用網址設定</button>
         <button class="btn sm ghost edit-only" onclick="editPlayer('${pid}')">編輯基本資料</button>
+        <button class="btn sm ghost edit-only" onclick="promotePlayer('${pid}')">⬆ 升級／轉階級</button>
         <button class="btn sm gold edit-only" id="advBtn" onclick="aiPlayerAdvice('${pid}')">🤖 AI 個人分析與建議</button>
       </div>
       <div id="advOut">${p.aiAdvice ? aiAdviceHTML(p.aiAdvice) : ""}</div>
-      <div class="subhead">生涯打擊</div>${batCards}
-      <div class="subhead">生涯投球</div>${pitCards}
+      ${tabsHTML}
+      <div class="subhead">${tabLabel}打擊</div>${batCards}
+      <div class="subhead">${tabLabel}投球</div>${pitCards}
       <div class="subhead">左右拆分</div>
       ${(()=>{
         const bs = batSplitAgg(allG, pid), ps = pitSplitAgg(allG, pid);
@@ -707,7 +733,7 @@ function openProfile(pid){
     </div>`;
   document.getElementById("modalBg").classList.add("show");
 }
-function closeProfile(){ document.getElementById("modalBg").classList.remove("show"); currentPid = null; }
+function closeProfile(){ document.getElementById("modalBg").classList.remove("show"); currentPid = null; profTab = "all"; }
 function renderScouts(){
   renderReportOptions();
   const list = visibleScouts().slice().reverse();

@@ -1,5 +1,5 @@
 /* ───────── 版本(每次發布前更新此處) ───────── */
-const APP_VERSION = "v1.20.6 · 2026-10-23";
+const APP_VERSION = "v1.21.0 · 2026-10-24";
 
 /* ───────── 階級與 ERA 局制基準(單一來源，新增/調整階級改這裡) ───────── */
 const LEVELS = ["U12","U15","U18","OB","其他"];
@@ -9,6 +9,7 @@ const ERA_BASE_DEFAULT = {U12:6,U15:7,U18:7,OB:9,"其他":9};
 let state = { teamName:"親子勇士", eraBases:{...ERA_BASE_DEFAULT}, players:[], games:[], honors:[], scouts:[] };
 let win = { overview:"all", batting:"all", pitching:"all" };
 let lvl = "all";
+let showPromoted = false;   // 排行/名單是否列入「已升級（目前階級≠所選階級）」球員；預設只看現役
 let tourFilter = "all";   // 賽事名稱篩選（全域，與階級一起套用）："all" 或某個賽事名稱
 let squadFilter = "all";   // 全域分隊篩選（與階級／賽事並聯）："all"|"藍"|"白"|"紅"；未分隊的舊比賽只在 all 時出現
 const openGames = new Set();   // 記住展開中的比賽卡片，讓即時同步重繪後仍保持展開
@@ -414,10 +415,48 @@ async function editPlayer(pid){
   const bats = await promptBox("打（右 / 左 / 兩，留空為不明）：", p.bats||""); if(bats===null) return;
   if(name.trim()) p.name = name.trim();
   p.num = num.trim(); p.pos = pos.trim();
-  p.level = LEVELS.includes(level.trim()) ? level.trim() : p.level;
+  if(LEVELS.includes(level.trim())) setPlayerLevel(p, level.trim(), todayStr());
   p.throws = ["右","左"].includes(throws.trim()) ? throws.trim() : "";
   p.bats = ["右","左","兩"].includes(bats.trim()) ? bats.trim() : "";
   save(); renderAll(); openProfile(pid);
+}
+
+/* ───────── 升級／轉階級 ─────────
+   成績歸屬以「比賽階級 g.level」為準，球員轉階級不搬動歷史比賽：U15 的成績永遠算 U15，新階級從 0 累積。
+   p.levelHistory 記錄階級歷程；排行／名單預設只列「目前階級＝所選階級」的現役球員。 */
+function todayStr(){ const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; }
+// 球員在所選階級篩選下是否為「已升級／轉出」（階級篩選為全部時一律視為現役）
+function isOutOfLevel(p){ return lvl!=="all" && (p.level||"U12")!==lvl; }
+// 現役優先：把轉出球員排到後面（穩定排序），showPromoted 關閉時直接剔除
+function promoFilter(rows, getPlayer){
+  const act = rows.filter(r=>!isOutOfLevel(getPlayer(r)));
+  if(!showPromoted) return act;
+  return act.concat(rows.filter(r=>isOutOfLevel(getPlayer(r))));
+}
+function promoToggleHTML(hasOut){
+  if(lvl==="all" || !hasOut) return "";
+  return `<label class="hint" style="display:inline-flex;gap:6px;align-items:center;margin-bottom:6px"><input type="checkbox" ${showPromoted?"checked":""} onchange="setShowPromoted(this.checked)">含已升級／轉階級球員（灰色顯示，不計入名次）</label>`;
+}
+function setShowPromoted(v){ showPromoted = !!v; renderAll(); }
+function promoTag(p){ return isOutOfLevel(p) ? `<span class="hint" style="margin-left:4px">→${esc(p.level||"U12")}</span>` : ""; }
+function setPlayerLevel(p, newLevel, date){
+  const old = p.level||"U12";
+  if(newLevel===old) return false;
+  if(!guardEdit(newLevel)) return false;   // 舊階級已在呼叫端檢查；這裡補檢查新階級
+  if(!p.levelHistory || !p.levelHistory.length) p.levelHistory = [{level:old, from:""}];
+  p.levelHistory.push({level:newLevel, from:date||todayStr()});
+  p.level = newLevel;
+  return true;
+}
+async function promotePlayer(pid){
+  const p = getP(pid); if(!p) return;
+  if(!guardEdit(p.level)) return;
+  const level = await promptBox(`升級／轉階級（${LEVELS.join(" / ")}）。\n歷史成績留在原階級，新階級從 0 累積：`, p.level||"U12"); if(level===null) return;
+  if(!LEVELS.includes(level.trim())) return toast("階級不正確");
+  const date = await promptBox("生效日期（YYYY-MM-DD）：", todayStr()); if(date===null) return;
+  const d = normDate(date); if(!d) return toast("日期格式不正確");
+  if(!setPlayerLevel(p, level.trim(), d)) return;
+  save(); renderAll(); openProfile(pid); toast(`${p.name} 已轉至 ${p.level}`);
 }
 
 /* ───────── AI 功能 ───────── */
