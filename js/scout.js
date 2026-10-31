@@ -1004,11 +1004,20 @@ function gotoScout(sid){
 function renderReportOptions(){
   const sel = document.getElementById("rpScout");
   if(!sel) return;
-  const cur = sel.value;
-  sel.innerHTML = `<option value="">（不含對手情蒐）</option>` +
-    visibleScouts().slice().reverse().map(s=>
-      `<option value="${s.id}">${esc(s.opp)}（${new Date(s.created).toLocaleDateString("zh-TW")}）</option>`).join("");
-  if(cur && [...sel.options].some(o=>o.value===cur)) sel.value = cur;
+  const cur = rpScoutIds();
+  const list = visibleScouts().slice().reverse();
+  sel.innerHTML = list.length ? list.map(s=>
+      `<label style="display:flex;align-items:center;gap:6px;font-size:14px;padding:2px 0;cursor:pointer"><input type="checkbox" value="${s.id}"${cur.includes(s.id)?" checked":""}>${esc(s.opp)}（${new Date(s.created).toLocaleDateString("zh-TW")}）</label>`).join("")
+    : `<div class="hint">尚無情蒐報告（不含對手情蒐）</div>`;
+}
+// 目前勾選的對手情蒐 id（依情蒐清單順序）
+function rpScoutIds(){
+  const box = document.getElementById("rpScout");
+  return box ? [...box.querySelectorAll("input:checked")].map(i=>i.value) : [];
+}
+function rpScoutSel(){
+  const ids = rpScoutIds();
+  return ids.map(id=>state.scouts.find(s=>s.id===id)).filter(Boolean);
 }
 function loadScript(src){
   return new Promise(res=>{ const s=document.createElement("script"); s.src=src; s.onload=res; s.onerror=res; document.head.appendChild(s); });
@@ -1021,10 +1030,9 @@ async function loadPdfLibs(){
   return (typeof html2canvas !== "undefined") && window.jspdf && window.jspdf.jsPDF;
 }
 function buildScoutReportHTML(){
-  const sid = document.getElementById("rpScout").value;
   const w = document.getElementById("rpWin").value;
   const note = document.getElementById("rpNote").value.trim();
-  const sc = sid ? state.scouts.find(s=>s.id===sid) : null;
+  const scs = rpScoutSel();
   const games = windowGames(w);
   const winTxt = w==="all" ? "全部賽事" : w==="1m" ? "近一個月" : "近 " + w + " 場";
   const lvlTxt = lvl==="all" ? "全隊" : lvl;
@@ -1051,21 +1059,25 @@ function buildScoutReportHTML(){
       ${logo?`<img src="${logo}" alt="">`:""}
       <div><h1>親子勇士 球探報告</h1>
         <div class="sub">SCOUTING REPORT · ${lvlTxt}${tourTxt?" · "+esc(tourTxt):""}${squadTxt?" · "+squadTxt:""} · 產生日期 ${new Date().toLocaleDateString("zh-TW")}</div></div>
-      ${sc?`<div class="rp-vs">對戰對手<br><b>${esc(sc.opp)}</b></div>`:""}
+      ${scs.length?`<div class="rp-vs">對戰對手<br><b>${scs.map(s=>esc(s.opp)).join("、")}</b></div>`:""}
     </div>`;
 
-  if(sc){
-    h += `<div class="rp-sec">${secNum()}對手情蒐${sc.source==="manual"?"（教練觀察）":"（AI 整理，請自行核對）"}</div>`;
-    if(sc.summary) h += `<p><b>整體觀察：</b>${esc(sc.summary)}</p>`;
-    if((sc.keyPlayers||[]).length){
-      h += `<table><tbody><tr><th class="l">指標人物</th><th>角色</th><th>左右</th><th class="l">留意說明</th></tr>`;
-      sc.keyPlayers.forEach(k=>{
-        h += `<tr><td class="l"><b>${esc(k.name)}</b></td><td>${esc(k.role||"—")}</td><td>${esc(k.hand||"不明")}</td><td class="l">${esc(k.note||"")}</td></tr>`;
-      });
-      h += `</tbody></table>`;
-    }
-    if(sc.strategy) h += `<p><b>🎯 應對建議：</b>${esc(sc.strategy)}</p>`;
-    if(sc.sources) h += `<p style="color:#999;font-size:10.5px">來源：${esc(sc.sources)}</p>`;
+  if(scs.length){
+    const allManual = scs.every(s=>s.source==="manual");
+    h += `<div class="rp-sec">${secNum()}對手情蒐${allManual?"（教練觀察）":"（AI 整理，請自行核對）"}</div>`;
+    scs.forEach(sc=>{
+      if(scs.length>1) h += `<p style="font-size:13px"><b>▍對手：${esc(sc.opp)}${sc.source==="manual"?"（教練觀察）":""}</b></p>`;
+      if(sc.summary) h += `<p><b>整體觀察：</b>${esc(sc.summary)}</p>`;
+      if((sc.keyPlayers||[]).length){
+        h += `<table><tbody><tr><th class="l">指標人物</th><th>角色</th><th>左右</th><th class="l">留意說明</th></tr>`;
+        sc.keyPlayers.forEach(k=>{
+          h += `<tr><td class="l"><b>${esc(k.name)}</b></td><td>${esc(k.role||"—")}</td><td>${esc(k.hand||"不明")}</td><td class="l">${esc(k.note||"")}</td></tr>`;
+        });
+        h += `</tbody></table>`;
+      }
+      if(sc.strategy) h += `<p><b>🎯 應對建議：</b>${esc(sc.strategy)}</p>`;
+      if(sc.sources) h += `<p style="color:#999;font-size:10.5px">來源：${esc(sc.sources)}</p>`;
+    });
   }
 
   h += `<div class="rp-sec">${secNum()}我方球隊近況（${winTxt}）</div>`;
@@ -1224,8 +1236,8 @@ async function downloadScoutPDF(){
     const { jsPDF } = window.jspdf;
     const pdf = new jsPDF({unit:"mm", format:"a4", orientation:"portrait"});
     addCanvasPages(pdf, canvas, stage);
-    const scSel = document.getElementById("rpScout");
-    const oppName = scSel.value ? (state.scouts.find(s=>s.id===scSel.value)||{}).opp : "";
+    const opps = rpScoutSel().map(s=>s.opp);
+    const oppName = opps.slice(0,3).join("、") + (opps.length>3 ? "等" : "");
     pdf.save(`親子勇士球探報告${oppName?"-vs"+oppName:""}-${new Date().toISOString().slice(0,10)}.pdf`);
     stage.innerHTML = "";
     toast("PDF 已下載");
