@@ -1007,7 +1007,7 @@ function renderReportOptions(){
   const cur = rpScoutIds();
   const list = visibleScouts().slice().reverse();
   sel.innerHTML = list.length ? list.map(s=>
-      `<label style="display:flex;align-items:center;gap:6px;font-size:14px;padding:2px 0;cursor:pointer"><input type="checkbox" value="${s.id}"${cur.includes(s.id)?" checked":""}>${esc(s.opp)}（${new Date(s.created).toLocaleDateString("zh-TW")}）</label>`).join("")
+      `<label style="display:flex;align-items:center;gap:6px;font-size:14px;color:var(--ink);padding:4px 0;cursor:pointer"><input type="checkbox" style="width:auto;flex:none" value="${s.id}"${cur.includes(s.id)?" checked":""}>${esc(s.opp)}（${new Date(s.created).toLocaleDateString("zh-TW")}）</label>`).join("")
     : `<div class="hint">尚無情蒐報告（不含對手情蒐）</div>`;
 }
 // 目前勾選的對手情蒐 id（依情蒐清單順序）
