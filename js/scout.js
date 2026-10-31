@@ -480,10 +480,23 @@ function myscoreFindPlayer(roster, name){
    賽事（game_id）貼一次網址就記在這台裝置，之後只要打隊名。找不到時回傳 null（改走網路搜尋）。*/
 const MS_ORIGIN = "https://myscore.games";
 const MS_GID_KEY = "scoutMsGid";
-// 依目前頂部篩選的「階級＋分隊」各自記住賽事（全隊/全部分隊也是一組）；舊版單一記錄當作未設定時的備援
+// 依目前頂部篩選的「階級＋分隊」各自記住賽事（全隊/全部分隊也是一組），存 Firestore teams/warriors 的 msGids 欄位跨裝置同步
+// （寫入沿用 meta 文件規則：編輯者以上）。讀取順序：雲端 → 本機同組記錄 → 舊版單一本機記錄（備援）
 function msGidKey(){ return `${MS_GID_KEY}:${lvl}:${squadFilter}`; }
-function msGidGet(){ try{ return localStorage.getItem(msGidKey()) || localStorage.getItem(MS_GID_KEY) || ""; }catch(e){ return ""; } }
-function msGidSet(v){ try{ if(v) localStorage.setItem(msGidKey(), v); else{ localStorage.removeItem(msGidKey()); localStorage.removeItem(MS_GID_KEY); } }catch(e){} }
+function msCloudKey(){ return `${lvl}|${squadFilter}`; }
+function msGidGet(){
+  if(msCloud[msCloudKey()]) return String(msCloud[msCloudKey()]);
+  try{ return localStorage.getItem(msGidKey()) || localStorage.getItem(MS_GID_KEY) || ""; }catch(e){ return ""; }
+}
+function msGidSet(v){
+  try{ if(v) localStorage.setItem(msGidKey(), v); else{ localStorage.removeItem(msGidKey()); localStorage.removeItem(MS_GID_KEY); } }catch(e){}
+  const k = msCloudKey();
+  if(v) msCloud[k] = v; else delete msCloud[k];
+  if(canEdit() && fs()){
+    teamRef.set({msGids:{[k]: v || firebase.firestore.FieldValue.delete()}}, {merge:true})
+      .catch(e=>{ console.error("就是棒賽事同步失敗", e); toast("賽事網址同步失敗："+(e.code||e.message||"請檢查網路")); });
+  }
+}
 function msUrlChange(){
   const v = document.getElementById("scMsUrl").value.trim();
   if(!v){ msGidSet(""); return toast("已清除記住的就是棒賽事"); }

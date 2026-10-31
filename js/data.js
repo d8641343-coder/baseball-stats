@@ -1,5 +1,5 @@
 /* ───────── 版本(每次發布前更新此處) ───────── */
-const APP_VERSION = "v1.21.3 · 2026-10-31";
+const APP_VERSION = "v1.21.4 · 2026-10-31";
 
 /* ───────── 階級與 ERA 局制基準(單一來源，新增/調整階級改這裡) ───────── */
 const LEVELS = ["U12","U15","U18","OB","其他"];
@@ -145,7 +145,7 @@ async function uploadMediaFile(input, gid){
    寫入：沿用既有各 CRUD 的「改 state + save()」寫法；save() 以「與上次同步後的差異」批次寫回
         （只寫變動的文件、刪除被移除的文件），mutator 完全不需改動。*/
 const COLLS = ["players","games","honors","scouts"];
-let db = null, teamRef = null, _subscribed = false, _renderTimer = null;
+let db = null, teamRef = null, _subscribed = false, _renderTimer = null, msCloud = {};
 let _lastSync = { players:{}, games:{}, honors:{}, scouts:{}, meta:"" };
 function fs(){ if(!db && typeof firebase!=="undefined" && firebase.apps && firebase.apps.length){ db = firebase.firestore(); teamRef = db.doc("teams/warriors"); } return db; }
 function col(name){ return fs() && db.collection("teams/warriors/"+name); }
@@ -175,6 +175,7 @@ function subscribeAll(){
     const m = d.exists ? d.data() : {};
     state.teamName = m.teamName || "親子勇士";
     state.eraBases = {...ERA_BASE_DEFAULT, ...(m.eraBases||{})};   // 補齊舊資料缺少的階級(如新增的 U18/OB)基準
+    msCloud = m.msGids || {};   // 就是棒賽事（依階級/分隊）：存在 meta 文件，跨裝置同步（見 scout.js msGidGet/msGidSet）
     _lastSync.meta = stableStr({teamName:state.teamName, eraBases:state.eraBases});
     scheduleRender();
   }, e=>console.error("meta 讀取失敗", e));
