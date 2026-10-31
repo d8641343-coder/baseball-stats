@@ -480,8 +480,10 @@ function myscoreFindPlayer(roster, name){
    賽事（game_id）貼一次網址就記在這台裝置，之後只要打隊名。找不到時回傳 null（改走網路搜尋）。*/
 const MS_ORIGIN = "https://myscore.games";
 const MS_GID_KEY = "scoutMsGid";
-function msGidGet(){ try{ return localStorage.getItem(MS_GID_KEY) || ""; }catch(e){ return ""; } }
-function msGidSet(v){ try{ if(v) localStorage.setItem(MS_GID_KEY, v); else localStorage.removeItem(MS_GID_KEY); }catch(e){} }
+// 依目前頂部篩選的「階級＋分隊」各自記住賽事（全隊/全部分隊也是一組）；舊版單一記錄當作未設定時的備援
+function msGidKey(){ return `${MS_GID_KEY}:${lvl}:${squadFilter}`; }
+function msGidGet(){ try{ return localStorage.getItem(msGidKey()) || localStorage.getItem(MS_GID_KEY) || ""; }catch(e){ return ""; } }
+function msGidSet(v){ try{ if(v) localStorage.setItem(msGidKey(), v); else{ localStorage.removeItem(msGidKey()); localStorage.removeItem(MS_GID_KEY); } }catch(e){} }
 function msUrlChange(){
   const v = document.getElementById("scMsUrl").value.trim();
   if(!v){ msGidSet(""); return toast("已清除記住的就是棒賽事"); }
@@ -492,7 +494,7 @@ function msUrlChange(){
 }
 function msUrlInit(){
   const el = document.getElementById("scMsUrl"), g = msGidGet();
-  if(el && g && !el.value) el.value = `${MS_ORIGIN}/index.php?game_id=${g}`;
+  if(el && document.activeElement !== el) el.value = g ? `${MS_ORIGIN}/index.php?game_id=${g}` : "";   // 切換階級/分隊時依該組合重填
 }
 msUrlInit();
 const msStopErr = m => { const e = new Error(m); e.stop = true; return e; };   // 使用者可處理的錯誤：直接顯示，不要再花錢搜尋

@@ -736,6 +736,7 @@ function openProfile(pid, tabLvl){
 function closeProfile(){ document.getElementById("modalBg").classList.remove("show"); currentPid = null; profTab = "all"; }
 function renderScouts(){
   renderReportOptions();
+  msUrlInit();
   const list = visibleScouts().slice().reverse();
   const emptyTxt = squadFilter!=="all"
     ? `此範圍（${esc(scopeLabel())}）尚無對手情蒐報告（只與其他分隊交手過的對手已隱藏，切到「全部分隊」可看全部）。`
