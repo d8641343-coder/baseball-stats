@@ -318,7 +318,7 @@ async function copyScoutPrompt(){
   if(!p) return;
   await copyText(p, "提問已複製，貼到 Claude 對話送出即可");
 }
-function parsePastedScout(){
+async function parsePastedScout(){
   if(!guardEdit()) return;
   const raw = document.getElementById("scPaste").value.trim();
   const out = document.getElementById("scPasteOut");
@@ -336,12 +336,24 @@ function parsePastedScout(){
       source:"ai", created:Date.now(),
       summary:r.summary||"", keyPlayers:Array.isArray(r.keyPlayers)?r.keyPlayers:[],
       strategy:r.strategy||"", sources:r.sources||"" };
-    if(oppPasteCtx && mode==="team" && oppPasteCtx.opp===opp) sc.group = oppPasteCtx.group;   // 由「對手數據」複製的提問，報告記下所屬分組
+    // 由「對手數據」複製的提問：報告記下所屬分組；同分組同隊已有報告就直接更新，不累積
+    const ctx = oppPasteCtx && mode==="team" && oppPasteCtx.opp===opp ? oppPasteCtx : null;
     oppPasteCtx = null;
+    let old = null;
+    if(ctx){
+      sc.group = ctx.group;
+      old = state.scouts.filter(s=>s.group===ctx.group && s.opp===opp).pop() || null;
+      const legacy = old ? null : state.scouts.filter(s=>!s.group && s.opp===opp).pop();   // 舊報告沒有分組，無法確定是同一隊，要先問
+      if(legacy && await confirmBox(`已有一份「${opp}」的舊報告（${new Date(legacy.created).toLocaleDateString("zh-TW")}），要直接更新它嗎？按取消會另存一份新報告。`)) old = legacy;
+    }
+    if(old){   // 沿用原 id 更新內容，並移到清單最前面
+      sc.id = old.id;
+      state.scouts.splice(state.scouts.indexOf(old), 1);
+    }
     state.scouts.push(sc);
     document.getElementById("scPaste").value = "";
     out.innerHTML = "";
-    save(); renderAll(); toast("情蒐報告已存檔"); gotoScout(sc.id);
+    save(); renderAll(); toast(old ? "情蒐報告已更新" : "情蒐報告已存檔"); gotoScout(sc.id);
   }catch(e){
     out.innerHTML = `<div class="ai-out">解析失敗：${esc(e.message||"格式不符")}。請確認貼上的是包含 JSON 區塊的完整回覆；也可改用「手動建立情蒐」。</div>`;
   }
@@ -1086,6 +1098,7 @@ function buildScoutReportHTML(){
     h += `<div class="rp-sec">${secNum()}對手情蒐${allManual?"（教練觀察）":"（AI 整理，請自行核對）"}</div>`;
     scs.forEach(sc=>{
       if(scs.length>1) h += `<p style="font-size:13px"><b>▍對手：${esc(sc.opp)}${sc.source==="manual"?"（教練觀察）":""}</b></p>`;
+      h += oppReportHTML(sc);
       if(sc.summary) h += `<p><b>整體觀察：</b>${esc(sc.summary)}</p>`;
       if((sc.keyPlayers||[]).length){
         h += `<table><tbody><tr><th class="l">指標人物</th><th>角色</th><th>左右</th><th class="l">留意說明</th></tr>`;
@@ -1430,6 +1443,26 @@ function oppImportFile(input){
     }
   };
   reader.readAsText(file);
+}
+// 找情蒐報告對應的對手數據：有分組就在該分組找；舊報告沒分組時，只接受全部分組中唯一的同名隊伍
+function oppFindForScout(sc){
+  const hits = [];
+  (oppGroups||[]).forEach(g=>{
+    if(sc.group && g.group!==sc.group) return;
+    g.teams.forEach(t=>{ if(t.name===sc.opp) hits.push({g, t}); });
+  });
+  return hits.length===1 ? hits[0] : null;
+}
+// PDF 用：該隊最新戰績 + 主力打者/投手。找不到數據時回傳空字串
+function oppReportHTML(sc){
+  const hit = oppFindForScout(sc);
+  if(!hit) return "";
+  const {g, t} = hit, r = oppRuns(t);
+  const bat = (t.batting||[]).slice().sort((a,b)=>(b.PA||0)-(a.PA||0)).slice(0,5).map(p=>`<tr><td class="l"><b>${esc(p.name)}</b> #${esc(p.num)}</td><td>${esc(p.G)}</td><td>${esc(p.PA)}</td><td>${esc(p.H)}</td><td>${esc(p.HR)}</td><td>${esc(p.BB)}</td><td>${esc(p.SO)}</td><td>${esc(p.RBI)}</td><td>${oppNum3(p.AVG)}</td><td>${oppNum3(p.OBP)}</td><td>${oppNum3(p.SLG)}</td></tr>`).join("");
+  const pit = (t.pitching||[]).slice().sort((a,b)=>parseFloat(b.IP||0)-parseFloat(a.IP||0)).slice(0,3).map(p=>`<tr><td class="l"><b>${esc(p.name)}</b> #${esc(p.num)}</td><td>${esc(p.G)}</td><td>${esc(p.W)}-${esc(p.L)}</td><td>${esc(p.IP)}</td><td>${esc(p.H)}</td><td>${esc(p.BB)}</td><td>${esc(p.SO)}</td><td>${esc(p.ER)}</td><td>${oppNum2(p.ERA)}</td></tr>`).join("");
+  return `<p><b>最新數據：</b>${esc(g.group)}　第 ${esc(t.rank)} 名（共 ${g.teams.length} 隊）・${oppRec(t)}・得失分 ${r.rf} : ${r.ra}<span style="color:#999;font-size:10.5px">　就是棒網站更新 ${esc(g.siteUpdated||"未知")}</span></p>
+    ${bat?`<table><tbody><tr><th class="l">主力打者（打席最多）</th><th>場</th><th>打席</th><th>安打</th><th>全壘打</th><th>四壞</th><th>三振</th><th>打點</th><th>打擊率</th><th>上壘率</th><th>長打率</th></tr>${bat}</tbody></table>`:""}
+    ${pit?`<table><tbody><tr><th class="l">主力投手（局數最多）</th><th>場</th><th>勝-敗</th><th>局數</th><th>被安打</th><th>四壞</th><th>三振</th><th>自責分</th><th>防禦率</th></tr>${pit}</tbody></table>`:""}`;
 }
 function oppImportCancel(){ oppPending = null; document.getElementById("oppImportOut").innerHTML = ""; }
 async function oppImportCommit(){
