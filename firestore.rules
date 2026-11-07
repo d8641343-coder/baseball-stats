@@ -21,10 +21,10 @@ service cloud.firestore {
       allow write: if isEditor();
     }
 
-    // 主要資料集合：球員 / 比賽 / 榮譽 / 情蒐
+    // 主要資料集合：球員 / 比賽 / 榮譽 / 情蒐 / 對手數據
     match /teams/warriors/{coll}/{id} {
-      allow read: if isMember() && coll in ['players','games','honors','scouts'];
-      allow write: if isEditor() && coll in ['players','games','honors','scouts'];
+      allow read: if isMember() && coll in ['players','games','honors','scouts','oppStats'];
+      allow write: if isEditor() && coll in ['players','games','honors','scouts','oppStats'];
     }
 
     // 成員名單與核准

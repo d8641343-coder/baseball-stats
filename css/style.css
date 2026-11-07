@@ -259,3 +259,8 @@ body:not(.admin) .admin-only{display:none!important}
 /* 分隊徽章 */
 .squad-badge{display:inline-block;border-radius:4px;padding:1px 7px;font-size:11px;font-weight:700;margin-left:6px;color:#fff}
 .sq-藍{background:#2563b6}.sq-白{background:#8a8f99}.sq-紅{background:#c0392b}
+/* 對手數據 */
+.opp-row{cursor:pointer}
+.opp-row:hover td{background:#f4f6fa}
+.opp-row.on td{background:#fdf4d8}
+.opp-imp{display:flex;gap:8px;align-items:flex-start;padding:6px 0;font-size:14px;cursor:pointer}

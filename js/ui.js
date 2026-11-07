@@ -737,6 +737,7 @@ function closeProfile(){ document.getElementById("modalBg").classList.remove("sh
 function renderScouts(){
   renderReportOptions();
   msUrlInit();
+  renderOppStats();
   const list = visibleScouts().slice().reverse();
   const emptyTxt = `尚無情蒐報告。賽前先用上方任一方式建立，比賽卡片就會自動出現「對手情蒐」捷徑。`;
   document.getElementById("scoutList").innerHTML = list.length ? list.map(sc=>`
@@ -861,6 +862,7 @@ document.querySelectorAll(".tab").forEach(b => b.onclick = () => {
   document.querySelectorAll("main section").forEach(x=>x.classList.remove("active"));
   b.classList.add("active");
   document.getElementById(b.dataset.tab).classList.add("active");
+  if(b.dataset.tab==="scout") oppLoad();
 });
 document.getElementById("lvlChips").addEventListener("click", e=>{
   if(!e.target.classList.contains("chip")) return;

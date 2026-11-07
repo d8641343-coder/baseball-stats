@@ -336,6 +336,8 @@ function parsePastedScout(){
       source:"ai", created:Date.now(),
       summary:r.summary||"", keyPlayers:Array.isArray(r.keyPlayers)?r.keyPlayers:[],
       strategy:r.strategy||"", sources:r.sources||"" };
+    if(oppPasteCtx && mode==="team" && oppPasteCtx.opp===opp) sc.group = oppPasteCtx.group;   // 由「對手數據」複製的提問，報告記下所屬分組
+    oppPasteCtx = null;
     state.scouts.push(sc);
     document.getElementById("scPaste").value = "";
     out.innerHTML = "";
@@ -714,6 +716,7 @@ ${cmts?`\n現場講評記錄：\n${cmts}\n`:""}
 1.「本日最佳特寫」：挑一位表現最突出、能串聯打/投/守亮點的球員做重點特寫，下一個吸睛小標題。
 2.「🔥 賽後焦點」：介紹其餘 2~4 位有亮點的球員，各自用一個有趣的暱稱/小標題帶出重點數據。
 3.「🎙️ 總結」：簡短總結整場比賽氣氛與團隊精神，正向收尾。
+每次寫作請換不同的開場方式與小標題風格，暱稱要貼合該場實際表現，不要用泛用詞或固定套路。
 全文約 400~600 字，語氣活潑、可用表情符號，但提到的數字（打數/安打/打點等）必須跟上面提供的數據一致，不可加總或換算錯誤。直接輸出文章內容本身，不要加 markdown 符號（#、**），用換行分段即可。`;
     const text = await callClaude(prompt, false, "highlight", 0.9);
     g.aiHighlight = { text: text.trim(), created: Date.now(), level: g.level };
@@ -971,6 +974,7 @@ function scoutCardHTML(sc, saved){
   return `
     <div style="font-size:15px;font-weight:700">🔍 對手：${esc(sc.opp)}
       <span class="src-tag src-${sc.source}">${sc.source==="ai"?"網路情蒐":sc.source==="url"?"網頁分析":"手動"}</span>
+      ${sc.group?`<span class="hint" style="font-weight:400;margin-left:8px">${esc(sc.group)}</span>`:""}
       ${saved?`<span class="hint" style="font-weight:400;margin-left:8px">${new Date(sc.created).toLocaleDateString("zh-TW")}</span>`:""}
     </div>
     <div style="font-size:14px;margin:8px 0">${esc(sc.summary||"")}</div>
@@ -1266,4 +1270,186 @@ async function downloadScoutPDF(){
 /* ───────── 榮譽殿堂 ───────── */
 function showImpFormat(){
   document.getElementById("impFormat").textContent = IMP_FORMATS[document.getElementById("impType").value];
+}
+
+/* ───────── 對手數據（就是棒） ─────────
+   資料由本機排程 tools/myscore-sync/sync.py 產生，編輯者在此匯入。
+   結構：teams/warriors/oppStats/{gameId}，一個分組（聯盟）一份文件，內含全部隊伍。
+   刻意不放進 COLLS / state：只在開啟情蒐頁時讀一次，不做即時訂閱，也不經過 save()。
+   隊伍一律以「分組 + teamId」識別：同一隊名可能出現在不同分組。*/
+const OPP_SCHEMA = 1;
+const OPP_MAX_DOC = 900000;   // Firestore 單一文件上限 1MB，留一點餘裕
+let oppGroups = null;         // null＝尚未載入
+let oppLoading = false, oppLoadErr = "", oppGroupId = "", oppTeamId = 0;
+let oppPending = null;        // 匯入預覽中的資料
+let oppPasteCtx = null;       // 複製提問時的 {opp, group}，貼回報告時用來標記分組
+async function oppLoad(force){
+  if(oppLoading || (oppGroups && !force) || !fs()) return;
+  oppLoading = true;
+  try{
+    const s = await col("oppStats").get();
+    const rank = g => { const i = LEVELS.indexOf(g.level); return i<0 ? LEVELS.length : i; };
+    oppGroups = s.docs.map(d=>d.data()).sort((a,b)=> rank(a)-rank(b) || a.gameId-b.gameId);
+    oppLoadErr = "";
+  }catch(e){
+    console.error("對手數據讀取失敗", e);
+    oppLoadErr = e.code==="permission-denied" ? "沒有讀取權限：Firebase 安全規則可能尚未更新。" : "對手數據讀取失敗："+(e.code||e.message||"請檢查網路");
+  }
+  oppLoading = false;
+  renderOppStats();
+}
+function oppVisibleGroups(){ return (oppGroups||[]).filter(g=> lvl==="all" || g.level===lvl); }
+function oppCurrentGroup(){ return oppVisibleGroups().find(g=>String(g.gameId)===oppGroupId) || null; }
+function oppGroupChange(v){ oppGroupId = v; oppTeamId = 0; renderOppStats(); }
+function oppPickTeam(id){ oppTeamId = oppTeamId===id ? 0 : id; renderOppStats(); }
+const oppVal = (v, fn) => typeof v==="number" ? fn(v) : esc(v==null||v==="" ? "-" : v);
+const oppNum2 = v => oppVal(v, x=>x.toFixed(2));
+const oppNum3 = v => oppVal(v, x=>x.toFixed(3));
+const oppRec = t => `${t.w}勝${t.l}敗${t.t?t.t+"和":""}`;
+function oppRuns(t){
+  return (t.games||[]).reduce((a,x)=>{ if(x.result){ a.rf += x.us; a.ra += x.them; } return a; }, {rf:0, ra:0});
+}
+function renderOppStats(){
+  const sel = document.getElementById("oppGroup"), box = document.getElementById("oppView");
+  if(!sel || !box) return;
+  const list = oppVisibleGroups();
+  if(!list.some(g=>String(g.gameId)===oppGroupId)){ oppGroupId = list.length ? String(list[0].gameId) : ""; oppTeamId = 0; }
+  sel.innerHTML = list.length
+    ? list.map(g=>`<option value="${g.gameId}"${String(g.gameId)===oppGroupId?" selected":""}>${esc(g.group)}</option>`).join("")
+    : `<option value="">（尚無分組）</option>`;
+  if(oppLoadErr){ box.innerHTML = `<div class="empty">${esc(oppLoadErr)}</div>`; return; }
+  if(!oppGroups){ box.innerHTML = `<div class="hint" style="margin-top:8px">載入中…</div>`; return; }
+  const g = oppCurrentGroup();
+  if(!g){ box.innerHTML = `<div class="empty">${oppGroups.length?"目前階級沒有對手數據。":"尚未匯入對手數據。"}</div>`; return; }
+  const rows = g.teams.slice().sort((a,b)=>a.rank-b.rank).map(t=>{
+    const r = oppRuns(t), dec = t.w+t.l;
+    return `<tr class="opp-row${t.teamId===oppTeamId?" on":""}" onclick="oppPickTeam(${Number(t.teamId)})">
+      <td>${esc(t.rank)}</td><td class="l"><b>${esc(t.name)}</b>${t.stale?` <span class="hint">（舊資料）</span>`:""}</td>
+      <td>${esc(t.w)}</td><td>${esc(t.l)}</td><td>${esc(t.t)}</td><td>${dec?(t.w/dec).toFixed(3):"-"}</td><td>${r.rf}</td><td>${r.ra}</td></tr>`;
+  }).join("");
+  const team = g.teams.find(t=>t.teamId===oppTeamId);
+  box.innerHTML = `<div class="hint" style="margin-top:10px">${esc(g.tournament||"")}｜網站更新 ${esc(g.siteUpdated||"未知")}｜抓取 ${esc((g.syncedAt||"").replace("T"," ").slice(0,16))}</div>
+    <div class="subhead">分組戰績（點隊伍看詳細）</div>
+    <div class="tblwrap"><table style="min-width:440px"><thead><tr><th>排名</th><th class="l">球隊</th><th>勝</th><th>敗</th><th>和</th><th>勝率</th><th>得分</th><th>失分</th></tr></thead><tbody>${rows}</tbody></table></div>
+    ${team ? oppTeamHTML(team) : ""}`;
+}
+function oppTeamHTML(t){
+  const G = {W:"勝",L:"敗",T:"和"};
+  const games = (t.games||[]).map(x=>`<tr><td>${esc(x.date)}</td><td class="l">${esc(x.opp)}</td><td>${x.result?`${esc(x.us)} : ${esc(x.them)}`:"-"}</td><td>${x.result?G[x.result]:"未賽"}</td><td class="l">${esc(x.venue||"")}</td></tr>`).join("");
+  const bat = (t.batting||[]).slice().sort((a,b)=>(b.PA||0)-(a.PA||0)).map(p=>`<tr><td>${esc(p.num)}</td><td class="l">${esc(p.name)}</td><td>${esc(p.G)}</td><td>${esc(p.PA)}</td><td>${esc(p.AB)}</td><td>${esc(p.H)}</td><td>${esc(p.d2)}</td><td>${esc(p.d3)}</td><td>${esc(p.HR)}</td><td>${esc(p.BB)}</td><td>${esc(p.SO)}</td><td>${esc(p.RBI)}</td><td>${esc(p.R)}</td><td>${oppNum3(p.AVG)}</td><td>${oppNum3(p.OBP)}</td><td>${oppNum3(p.SLG)}</td></tr>`).join("");
+  const pit = (t.pitching||[]).slice().sort((a,b)=>parseFloat(b.IP||0)-parseFloat(a.IP||0)).map(p=>`<tr><td>${esc(p.num)}</td><td class="l">${esc(p.name)}</td><td>${esc(p.G)}</td><td>${esc(p.W)}</td><td>${esc(p.L)}</td><td>${esc(p.SV)}</td><td>${esc(p.IP)}</td><td>${esc(p.H)}</td><td>${esc(p.HR)}</td><td>${esc(p.BB)}</td><td>${esc(p.SO)}</td><td>${esc(p.R)}</td><td>${esc(p.ER)}</td><td>${oppNum3(p.AVG)}</td><td>${oppNum2(p.ERA)}</td></tr>`).join("");
+  return `<div class="frow" style="justify-content:space-between;margin-top:14px;align-items:center">
+      <div style="font-size:15px;font-weight:700">${esc(t.name)}（${oppRec(t)}）</div>
+      <button class="btn ghost sm edit-only" onclick="oppCopyPrompt()">複製情蒐提問（含數據）</button>
+    </div>
+    <div class="subhead">賽程結果</div>
+    ${games?`<div class="tblwrap"><table style="min-width:420px"><thead><tr><th>日期</th><th class="l">對手</th><th>比分</th><th>結果</th><th class="l">場地</th></tr></thead><tbody>${games}</tbody></table></div>`:`<div class="hint">尚無賽程。</div>`}
+    <div class="subhead">打者</div>
+    ${bat?`<div class="tblwrap"><table style="min-width:680px"><thead><tr><th>背號</th><th class="l">球員</th><th>場</th><th>打席</th><th>打數</th><th>安打</th><th>二安</th><th>三安</th><th>全壘打</th><th>四壞</th><th>三振</th><th>打點</th><th>得分</th><th>打擊率</th><th>上壘率</th><th>長打率</th></tr></thead><tbody>${bat}</tbody></table></div>`:`<div class="hint">尚無打擊數據。</div>`}
+    <div class="subhead">投手</div>
+    ${pit?`<div class="tblwrap"><table style="min-width:640px"><thead><tr><th>背號</th><th class="l">球員</th><th>場</th><th>勝</th><th>敗</th><th>救援</th><th>局數</th><th>被安打</th><th>被全壘打</th><th>四壞</th><th>三振</th><th>失分</th><th>自責分</th><th>被打擊率</th><th>防禦率</th></tr></thead><tbody>${pit}</tbody></table></div>`:`<div class="hint">尚無投球數據。</div>`}`;
+}
+function oppBuildPrompt(g, t){
+  const G = {W:"勝",L:"敗",T:"和"};
+  const stand = g.teams.slice().sort((a,b)=>a.rank-b.rank).map(x=>`${x.rank}. ${x.name} ${oppRec(x)}`).join("\n");
+  const games = (t.games||[]).map(x=> x.result ? `${x.date} 對 ${x.opp} ${x.us}:${x.them}（${G[x.result]}）` : `${x.date} 對 ${x.opp}（未賽）`).join("\n");
+  const bat = (t.batting||[]).map(p=>`${p.num} ${p.name}：${p.G}場 ${p.PA}打席 ${p.AB}打數 ${p.H}安 二安${p.d2} 三安${p.d3} 全壘打${p.HR} 四壞${p.BB} 三振${p.SO} 打點${p.RBI} 得分${p.R} 打擊率${p.AVG} 上壘率${p.OBP} 長打率${p.SLG}`).join("\n");
+  const pit = (t.pitching||[]).map(p=>`${p.num} ${p.name}：${p.G}場 ${p.W}勝${p.L}敗${p.SV}救援 ${p.IP}局 被安${p.H} 被全壘打${p.HR} 四壞${p.BB} 三振${p.SO} 失分${p.R} 自責${p.ER} 防禦率${p.ERA}`).join("\n");
+  return `請幫我做賽前情蒐。我的球隊是「${state.teamName}」，即將與「${t.name}」對戰。以下是「就是棒」(myscore.games) 網站的公開數據（姓名第二字遮蔽屬正常現象，請沿用原寫法）。
+請只依據這些數據整理：近況與風格、需要留意的指標球員（投手/打者，須引用實際數字）與原因、我方應對建議。比較時請以同分組的隊伍為基準，不可編造。keyPlayers 挑 2~4 位最需留意者。
+${SCOUT_JSON_SPEC}
+
+【賽事】${g.tournament||""}
+【分組】${g.group}
+【資料更新】網站 ${g.siteUpdated||"未知"}
+
+【分組戰績】
+${stand}
+
+【${t.name} 賽程結果】
+${games||"無"}
+
+【打者】
+${bat||"無"}
+
+【投手】
+${pit||"無"}`;
+}
+async function oppCopyPrompt(){
+  const g = oppCurrentGroup(), t = g && g.teams.find(x=>x.teamId===oppTeamId);
+  if(!t || !guardEdit(g.level)) return;
+  document.getElementById("scMode").value = "team";
+  scModeChange();
+  document.getElementById("scOpp").value = t.name;
+  oppPasteCtx = { opp:t.name, group:g.group };
+  await copyText(oppBuildPrompt(g, t), "提問已複製：貼到 Claude Desktop 對話，再把回覆貼回下方半自動情蒐");
+}
+function oppValidate(d){
+  if(!d || d.schema!==OPP_SCHEMA || !Array.isArray(d.groups) || !d.groups.length || !d.syncedAt) throw new Error("這不是 sync.py 產生的對手數據檔");
+  d.groups.forEach(g=>{
+    const ok = Number.isInteger(g.gameId) && LEVELS.includes(g.level) && typeof g.group==="string" && g.group && Array.isArray(g.teams) && g.teams.length
+      && g.teams.every(t=>Number.isInteger(t.teamId) && typeof t.name==="string" && Array.isArray(t.games) && Array.isArray(t.batting) && Array.isArray(t.pitching));
+    if(!ok) throw new Error(`分組「${g.group||g.gameId}」資料不完整`);
+    if(JSON.stringify(g).length > OPP_MAX_DOC) throw new Error(`分組「${g.group}」資料過大`);
+  });
+}
+const oppPlayed = t => (t.games||[]).filter(x=>x.result).length;
+function oppDiff(g, syncedAt){
+  const cur = (oppGroups||[]).find(x=>x.gameId===g.gameId);
+  if(!cur) return { older:false, text:"新分組" };
+  if(syncedAt < (cur.syncedAt||"")) return { older:true, text:`⚠ 比線上資料舊（線上：${(cur.syncedAt||"").slice(0,10)}）` };
+  const before = {}; cur.teams.forEach(t=>{ before[t.teamId] = oppPlayed(t); });
+  const added = g.teams.reduce((n,t)=> n + Math.max(0, oppPlayed(t)-(before[t.teamId]||0)), 0);
+  return { older:false, text: added ? `新增 ${added} 筆比賽紀錄` : "比賽場數無變化" };
+}
+function oppImportFile(input){
+  if(!guardEdit()) return;
+  const file = input.files[0]; if(!file) return;
+  const out = document.getElementById("oppImportOut");
+  const reader = new FileReader();
+  reader.onload = async () => {
+    input.value = "";
+    try{
+      const d = JSON.parse(reader.result);
+      oppValidate(d);
+      await oppLoad(true);
+      if(oppLoadErr) throw new Error(oppLoadErr);
+      oppPending = d;
+      const rows = d.groups.map(g=>{
+        const diff = oppDiff(g, d.syncedAt), can = canEdit(g.level);
+        return `<label class="opp-imp"><input type="checkbox" data-gid="${g.gameId}"${can&&!diff.older?" checked":""}${can?"":" disabled"}>
+          <span><b>${esc(g.group)}</b>　${g.teams.length} 隊・網站更新 ${esc(g.siteUpdated||"未知")}<br><span class="hint">${esc(diff.text)}${can?"":`　（你沒有 ${esc(g.level)} 的編輯權限，將略過）`}</span></span></label>`;
+      }).join("");
+      out.innerHTML = `<div class="ai-out" style="margin-top:10px">
+        <div style="font-weight:700;margin-bottom:6px">匯入預覽（抓取時間 ${esc(d.syncedAt.replace("T"," ").slice(0,16))}）</div>
+        ${rows}
+        <div class="frow" style="margin-top:8px"><button class="btn sm" onclick="oppImportCommit()">確認匯入</button><button class="btn ghost sm" onclick="oppImportCancel()">取消</button></div></div>`;
+    }catch(e){
+      oppPending = null;
+      out.innerHTML = `<div class="ai-out" style="margin-top:10px">無法匯入：${esc(e instanceof SyntaxError ? "檔案不是有效的 JSON" : e.message)}</div>`;
+    }
+  };
+  reader.readAsText(file);
+}
+function oppImportCancel(){ oppPending = null; document.getElementById("oppImportOut").innerHTML = ""; }
+async function oppImportCommit(){
+  if(!oppPending || !guardEdit()) return;
+  const d = oppPending;
+  const ids = [...document.querySelectorAll("#oppImportOut input[data-gid]:checked")].map(x=>Number(x.dataset.gid));
+  const groups = d.groups.filter(g=>ids.includes(g.gameId) && canEdit(g.level));
+  if(!groups.length) return toast("請至少勾選一個分組");
+  const older = groups.filter(g=>oppDiff(g, d.syncedAt).older);
+  if(older.length && !await confirmBox(`${older.map(g=>g.group).join("、")} 的線上資料比這個檔案新，確定要用舊資料覆蓋？`)) return;
+  try{
+    const batch = db.batch(), now = Date.now(), who = (currentUser && (currentUser.displayName||currentUser.email)) || "";
+    groups.forEach(g=>batch.set(col("oppStats").doc(String(g.gameId)), clean({...g, syncedAt:d.syncedAt, importedAt:now, importedBy:who})));
+    await batch.commit();
+    logEvent("edit", `匯入對手數據：${groups.map(g=>g.group).join("、")}`);
+    oppImportCancel();
+    await oppLoad(true);
+    toast(`已匯入 ${groups.length} 個分組`);
+  }catch(e){
+    console.error("對手數據匯入失敗", e);
+    toast(e.code==="permission-denied" ? "匯入失敗：Firebase 安全規則可能尚未更新" : "匯入失敗："+(e.code||e.message||"請檢查網路"));
+  }
 }

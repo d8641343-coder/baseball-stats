@@ -8,7 +8,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
-<link rel="stylesheet" href="css/style.css?v=1.21.5">
+<link rel="stylesheet" href="css/style.css?v=1.22.0">
 </head>
 <body>
 
@@ -203,6 +203,18 @@
 <!-- ══ 對戰情蒐 ══ -->
 <section id="scout">
   <div id="netBanner"></div>
+  <h2>對手數據（就是棒）</h2>
+  <div class="panel">
+    <div class="frow">
+      <div class="fld" style="flex:1;min-width:220px"><label>分組（依上方階級篩選）</label><select id="oppGroup" onchange="oppGroupChange(this.value)"></select></div>
+      <button class="btn ghost sm edit-only" onclick="document.getElementById('oppFile').click()">匯入數據 JSON</button>
+      <input type="file" id="oppFile" accept=".json,application/json" style="display:none" onchange="oppImportFile(this)">
+    </div>
+    <div class="hint edit-only" style="margin-top:6px">每週四晚上排程會更新本機檔案，匯入時請選 <code>D:\baseball-stats\scout-data\latest.json</code>。寫入前會先顯示各分組的差異。</div>
+    <div id="oppImportOut"></div>
+    <div id="oppView"></div>
+  </div>
+
   <h2 class="edit-only">AI 網路情蒐</h2>
   <div class="panel edit-only">
     <p style="font-size:14px;margin-bottom:10px">賽前輸入對手隊名，AI 會搜尋公開網站（就是棒、賽事官網、新聞報導等）整理對手近況、需要留意的指標人物與應對說明。</p>
@@ -402,13 +414,13 @@
 <div id="pdfStage" style="position:absolute;left:-10000px;top:0;width:794px;background:#fff"></div>
 <div class="toast" id="toast"></div>
 
-<script src="js/firebase-config.js?v=1.21.5"></script>
-<script src="js/data.js?v=1.21.5"></script>
-<script src="js/auth.js?v=1.21.5"></script>
-<script src="js/batting.js?v=1.21.5"></script>
-<script src="js/pitching.js?v=1.21.5"></script>
-<script src="js/fielding.js?v=1.21.5"></script>
-<script src="js/scout.js?v=1.21.5"></script>
-<script src="js/ui.js?v=1.21.5"></script>
+<script src="js/firebase-config.js?v=1.22.0"></script>
+<script src="js/data.js?v=1.22.0"></script>
+<script src="js/auth.js?v=1.22.0"></script>
+<script src="js/batting.js?v=1.22.0"></script>
+<script src="js/pitching.js?v=1.22.0"></script>
+<script src="js/fielding.js?v=1.22.0"></script>
+<script src="js/scout.js?v=1.22.0"></script>
+<script src="js/ui.js?v=1.22.0"></script>
 </body>
 </html>
