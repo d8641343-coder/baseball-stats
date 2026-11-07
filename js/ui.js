@@ -738,9 +738,7 @@ function renderScouts(){
   renderReportOptions();
   msUrlInit();
   const list = visibleScouts().slice().reverse();
-  const emptyTxt = squadFilter!=="all"
-    ? `此範圍（${esc(scopeLabel())}）尚無對手情蒐報告（只與其他分隊交手過的對手已隱藏，切到「全部分隊」可看全部）。`
-    : `尚無情蒐報告。賽前先用上方任一方式建立，比賽卡片就會自動出現「對手情蒐」捷徑。`;
+  const emptyTxt = `尚無情蒐報告。賽前先用上方任一方式建立，比賽卡片就會自動出現「對手情蒐」捷徑。`;
   document.getElementById("scoutList").innerHTML = list.length ? list.map(sc=>`
     <div class="scout-card" id="sc-${sc.id}">
       <div class="frow" style="justify-content:flex-end;gap:8px;float:right">
@@ -757,12 +755,8 @@ function renderScouts(){
 // 隊名比對忽略括號/空白並容許包含（情蒐的「敦化國中(紅)」與比賽記錄的「敦化國中」視為同一隊）
 function visibleScouts(){
   const all = state.scouts||[];
-  if(squadFilter==="all") return all;
-  const key = s => String(s||"").replace(/[()（）\s]/g,"");
-  const same = (a,b)=>{ a = key(a); b = key(b); return !!a && !!b && (a===b || (a.length>=2 && b.length>=2 && (a.includes(b)||b.includes(a)))); };
-  const mine = lvlGames().map(g=>g.opp);
-  const everPlayed = (state.games||[]).map(g=>g.opp);
-  return all.filter(s => mine.some(o=>same(o,s.opp)) || !everPlayed.some(o=>same(o,s.opp)));
+  // 情蒐報告全分隊共享：某分隊（如紅）交手過的對手，其他分隊（如藍）也要看得到
+  return all;
 }
 function renderHonors(){
   if(document.getElementById("aiScope")?.value==="tour") fillAiTour();
