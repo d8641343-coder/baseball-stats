@@ -161,7 +161,10 @@ function parseAIJson(text){
   try{ return JSON.parse(clean); }catch(e){}
   const s = clean.indexOf("{"), e2 = clean.lastIndexOf("}");
   if(s<0||e2<0) throw new Error("AI 回覆中找不到結果資料，請再試一次");
-  try{ return JSON.parse(clean.slice(s, e2+1)); }
+  const body = clean.slice(s, e2+1);
+  try{ return JSON.parse(body); }catch(e){}
+  // 對話軟體常把直引號自動換成全形彎引號（“ ”），導致 JSON 無法解析：換回直引號再試一次
+  try{ return JSON.parse(body.replace(/[“”„‟〝〞＂]/g,'"')); }
   catch(e){ throw new Error("AI 回覆的資料格式不完整，請再試一次"); }
 }
 
